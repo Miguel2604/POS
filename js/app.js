@@ -42,6 +42,112 @@ document.addEventListener('DOMContentLoaded', () => {
         errorMessageDiv: document.getElementById('error-message'),
     };
 
+    // --- IndexedDB Setup ---
+
+    const dbName = 'canteenPOS';
+    const dbVersion = 2; // Upgrade version
+    let db = null;
+
+    function initDB() {
+        return new Promise((resolve, reject) => {
+            const request = indexedDB.open(dbName, dbVersion);
+
+            request.onupgradeneeded = (event) => {
+                db = event.target.result;
+                if (!db.objectStoreNames.contains('students')) {
+                    db.createObjectStore('students', { keyPath: 'uid' });
+                }
+                if (!db.objectStoreNames.contains('transactions')) {
+                    db.createObjectStore('transactions', { keyPath: 'transactionId' });
+                }
+                if (!db.objectStoreNames.contains('products')) {
+                    db.createObjectStore('products', { keyPath: 'id' });
+                }
+            };
+
+            request.onsuccess = (event) => {
+                db = event.target.result;
+                console.log('IndexedDB initialized');
+                resolve();
+            };
+
+            request.onerror = (event) => {
+                console.error('IndexedDB error:', event.target.error);
+                reject(event.target.error);
+            };
+        });
+    }
+
+    function saveStudent(student) {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('students', 'readwrite');
+            const store = tx.objectStore('students');
+            store.put(student);
+            tx.oncomplete = () => resolve();
+            tx.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    function getAllStudents() {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('students', 'readonly');
+            const store = tx.objectStore('students');
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    function saveTransaction(txData) {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('transactions', 'readwrite');
+            const store = tx.objectStore('transactions');
+            store.put(txData);
+            tx.oncomplete = () => resolve();
+            tx.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    function getAllTransactions() {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('transactions', 'readonly');
+            const store = tx.objectStore('transactions');
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    function saveProduct(product) {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('products', 'readwrite');
+            const store = tx.objectStore('products');
+            store.put(product);
+            tx.oncomplete = () => resolve();
+            tx.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    function getAllProducts() {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('products', 'readonly');
+            const store = tx.objectStore('products');
+            const request = store.getAll();
+            request.onsuccess = () => resolve(request.result);
+            request.onerror = (e) => reject(e.target.error);
+        });
+    }
+
+    function deleteProduct(id) {
+        return new Promise((resolve, reject) => {
+            const tx = db.transaction('products', 'readwrite');
+            const store = tx.objectStore('products');
+            store.delete(id);
+            tx.oncomplete = () => resolve();
+            tx.onerror = (e) => reject(e.target.error);
+        });
+    }
+
     // --- Application State & Data ---
     let state = {
         /**
@@ -115,11 +221,6 @@ document.addEventListener('DOMContentLoaded', () => {
             const productCard = document.createElement('div');
             productCard.className = 'border rounded-lg p-2 flex flex-col items-center shadow hover:shadow-md transition';
 
-            const img = document.createElement('img');
-            img.src = product.image;
-            img.alt = product.name;
-            img.className = 'mb-2 w-20 h-20 object-cover';
-
             const name = document.createElement('div');
             name.className = 'font-semibold mb-1 text-center';
             name.textContent = product.name;
@@ -145,7 +246,6 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
 
-            productCard.appendChild(img);
             productCard.appendChild(name);
             productCard.appendChild(price);
             productCard.appendChild(qtyInput);
@@ -325,6 +425,11 @@ document.addEventListener('DOMContentLoaded', () => {
         student.balance -= total;
         state.currentStudent.balance = student.balance;
 
+        // Persist updated student
+        saveStudent({ uid, name: student.name, balance: student.balance })
+            .then(() => console.log("Student balance updated in DB"))
+            .catch(err => console.error("Failed to update student in DB", err));
+
         // Record transaction
         const transaction = {
             transactionId: Date.now().toString(),
@@ -335,7 +440,10 @@ document.addEventListener('DOMContentLoaded', () => {
         };
         state.transactions.push(transaction);
 
-        // TODO: Save updated students and transactions to LocalStorage in Step 7
+        // Persist transaction
+        saveTransaction(transaction)
+            .then(() => console.log("Transaction saved in DB"))
+            .catch(err => console.error("Failed to save transaction in DB", err));
 
         // Show success message
         showNotification("Payment successful!", "success", 3000);
@@ -426,24 +534,123 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log("Closing Admin Panel...");
             adminModal.classList.add('hidden');
         });
+
+        const exitAdminButton = document.getElementById('exit-admin-button');
+        if (exitAdminButton) {
+            exitAdminButton.addEventListener('click', () => {
+                console.log("Exiting Admin Panel...");
+                adminModal.classList.add('hidden');
+            });
+            const exportBtn = document.getElementById('export-data-button');
+        const importInput = document.getElementById('import-data-input');
+
+        if (exportBtn) {
+            exportBtn.addEventListener('click', async () => {
+                const students = await getAllStudents();
+                const transactions = await getAllTransactions();
+                const data = { students, transactions };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'canteen_pos_backup.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+            const resetDbButton = document.getElementById('reset-db-button');
+        if (resetDbButton) {
+            resetDbButton.addEventListener('click', () => {
+                if (confirm('Are you sure you want to delete ALL data? This cannot be undone.')) {
+                    indexedDB.deleteDatabase(dbName);
+                    alert('Database reset. Reloading...');
+                    location.reload();
+                }
+            });
+        }
     }
 
-    function renderAdminPanel() {
+        if (importInput) {
+            importInput.addEventListener('change', async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const text = await file.text();
+                try {
+                    const data = JSON.parse(text);
+                    if (data.students && Array.isArray(data.students)) {
+                        for (const s of data.students) {
+                            await saveStudent(s);
+                        }
+                    }
+                    if (data.transactions && Array.isArray(data.transactions)) {
+                        for (const t of data.transactions) {
+                            await saveTransaction(t);
+                        }
+                    }
+                    alert('Data imported successfully');
+                    location.reload();
+                } catch (e) {
+                    console.error('Import error:', e);
+                    alert('Failed to import data: ' + e.message);
+                }
+            });
+        }
+    }
+
+        const searchInput = document.getElementById('admin-student-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                renderAdminPanel(searchInput.value.trim().toLowerCase());
+            });
+        }
+    }
+
+    function renderAdminPanel(filter = '') {
         // Render students
         adminStudentList.innerHTML = '';
         for (const uid in state.students) {
             const student = state.students[uid];
+            const nameLower = student.name.toLowerCase();
+            if (filter && !uid.toLowerCase().includes(filter) && !nameLower.includes(filter)) {
+                continue;
+            }
+
             const div = document.createElement('div');
-            div.className = 'flex justify-between items-center border p-2 rounded';
+            div.className = 'flex justify-between items-center border p-2 rounded gap-2';
 
             const info = document.createElement('div');
             info.innerHTML = `<strong>${student.name}</strong><br><span class="text-sm text-gray-600">UID: ${uid}</span>`;
 
-            const balance = document.createElement('div');
-            balance.innerHTML = `Balance: ₱${student.balance.toFixed(2)}`;
+            const balanceDiv = document.createElement('div');
+            balanceDiv.className = 'flex items-center gap-2';
+
+            const balanceInput = document.createElement('input');
+            balanceInput.type = 'number';
+            balanceInput.value = student.balance.toFixed(2);
+            balanceInput.className = 'w-24 border border-gray-300 rounded p-1 text-right';
+
+            const saveBtn = document.createElement('button');
+            saveBtn.textContent = 'Save';
+            saveBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-sm';
+
+            saveBtn.addEventListener('click', async () => {
+                const newBalance = parseFloat(balanceInput.value);
+                if (isNaN(newBalance) || newBalance < 0) {
+                    alert('Invalid balance amount');
+                    return;
+                }
+                student.balance = newBalance;
+                await saveStudent({ uid, name: student.name, balance: newBalance });
+                alert('Balance updated');
+                renderAdminPanel(filter);
+            });
+
+            balanceDiv.appendChild(balanceInput);
+            balanceDiv.appendChild(saveBtn);
 
             div.appendChild(info);
-            div.appendChild(balance);
+            div.appendChild(balanceDiv);
             adminStudentList.appendChild(div);
         }
 
@@ -464,6 +671,100 @@ document.addEventListener('DOMContentLoaded', () => {
                 adminTransactionList.appendChild(div);
             });
         }
+
+        // Render products
+        const productListDiv = document.getElementById('admin-product-list');
+        const addProductForm = document.getElementById('admin-add-product-form');
+        if (!productListDiv || !addProductForm) return;
+
+        // Load products from DB
+        async function renderProductList() {
+            const products = await getAllProducts();
+            productListDiv.innerHTML = '';
+            products.forEach(product => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center border p-2 rounded gap-2';
+
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'flex-1 flex gap-2';
+
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.value = product.name;
+                nameInput.className = 'flex-1 border border-gray-300 rounded p-1';
+
+                const priceInput = document.createElement('input');
+                priceInput.type = 'number';
+                priceInput.value = product.price.toFixed(2);
+                priceInput.className = 'w-24 border border-gray-300 rounded p-1 text-right';
+
+                infoDiv.appendChild(nameInput);
+                infoDiv.appendChild(priceInput);
+
+                const saveBtn = document.createElement('button');
+                saveBtn.textContent = 'Save';
+                saveBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-sm';
+                saveBtn.addEventListener('click', async () => {
+                    const newName = nameInput.value.trim();
+                    const newPrice = parseFloat(priceInput.value);
+                    if (!newName || isNaN(newPrice) || newPrice < 0) {
+                        alert('Invalid product data');
+                        return;
+                    }
+                    await saveProduct({ id: product.id, name: newName, price: newPrice });
+                    alert('Product updated');
+                    renderProductList();
+                });
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Delete';
+                deleteBtn.className = 'bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-sm';
+                deleteBtn.addEventListener('click', async () => {
+                    if (confirm('Delete this product?')) {
+                        await deleteProduct(product.id);
+                        alert('Product deleted');
+                        renderProductList();
+                    }
+                });
+
+                div.appendChild(infoDiv);
+                div.appendChild(saveBtn);
+                div.appendChild(deleteBtn);
+
+                productListDiv.appendChild(div);
+            });
+        }
+
+        // Initial render
+        renderProductList();
+
+        addProductForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const nameInput = document.getElementById('admin-product-name');
+            const priceInput = document.getElementById('admin-product-price');
+            const name = nameInput.value.trim();
+            const price = parseFloat(priceInput.value);
+            if (!name || isNaN(price) || price < 0) {
+                alert('Invalid product data');
+                return;
+            }
+            const id = 'prod_' + Date.now();
+            await saveProduct({ id, name, price });
+            alert('Product added');
+            nameInput.value = '';
+            priceInput.value = '';
+            await renderProductList();
+            state.products = await getAllProducts();
+            loadProducts();
+        };
+
+        // Close Admin Panel on Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !adminModal.classList.contains('hidden')) {
+                console.log("Closing Admin Panel via Escape key");
+                adminModal.classList.add('hidden');
+            }
+        });
     }
 
     // Pay Button -> Open Modal
@@ -535,15 +836,53 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Initialization ---
     console.log("Initializing application data and UI...");
-    // In a real app, loadStudentData() and loadProducts() might fetch from storage here.
-    // For now, we use the sample data defined in state.
-    loadProducts(); // Placeholder call, will render products in Step 3
-    loadStudentData(); // Placeholder call
-    updateCartDisplay(); // Initial call to set cart state (e.g., disable buttons)
+
+    initDB().then(async () => {
+        // Load students
+        const students = await getAllStudents();
+        if (students.length === 0) {
+            console.log("No students found in DB, saving sample students...");
+            for (const uid in state.students) {
+                await saveStudent({ uid, ...state.students[uid] });
+            }
+        } else {
+            console.log("Loaded students from DB:", students);
+            state.students = {};
+            students.forEach(s => {
+                state.students[s.uid] = { name: s.name, balance: s.balance };
+            });
+        }
+
+        // Load transactions
+        const transactions = await getAllTransactions();
+        if (transactions.length === 0) {
+            console.log("No transactions found in DB.");
+        } else {
+            console.log("Loaded transactions from DB:", transactions);
+            state.transactions = transactions;
+        }
+
+        // Load products
+        const products = await getAllProducts();
+        if (products.length === 0) {
+            console.log("No products found in DB, saving sample products...");
+            for (const p of state.products) {
+                await saveProduct(p);
+            }
+        } else {
+            console.log("Loaded products from DB:", products);
+            state.products = products;
+        }
+
+        loadProducts();
+        updateCartDisplay();
+    }).catch(err => {
+        console.error("Failed to initialize IndexedDB:", err);
+        loadProducts();
+        updateCartDisplay();
+    });
 
     console.log("POS Application Initialized and Ready.");
-    console.log("Sample Products:", state.products);
-    console.log("Sample Students:", state.students);
 
 
 }); // End of DOMContentLoaded

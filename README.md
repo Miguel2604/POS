@@ -1,73 +1,92 @@
 # University Canteen POS System
 
-A simple offline Point-of-Sale (POS) application designed for university canteens. Students pay using their RFID-enabled ID cards, with all data stored locally in the browser.
+An offline Point-of-Sale (POS) application for university canteens, supporting RFID-based payments, persistent local storage, and an admin interface.
 
 ---
 
 ## Features
 
-- **Minimalist, fast UI** built with Tailwind CSS for efficient cashier operation
-- **Product menu** with quantity selectors and add-to-cart functionality
-- **Shopping cart** showing selected items and total amount
+- **Minimalist, fast UI** with Tailwind CSS
+- **Product menu** with quantity selectors and add-to-cart
+- **Shopping cart** with subtotal and total
 - **RFID payment modal**:
   - Accepts student ID via RFID reader (keyboard emulation)
   - Masks input for privacy
   - Checks student balance before confirming payment
 - **Transaction processing**:
-  - Deducts purchase amount from student balance
+  - Deducts from student balance
   - Records transaction details with timestamp
-  - Displays success or error messages
+  - Displays success/error messages
+- **Persistent offline storage** using IndexedDB:
+  - Students
+  - Transactions
+  - Products
 - **Admin Panel**:
-  - View all student accounts and balances
+  - View, search, and edit student accounts
   - View transaction history
-  - (Future) Manage products, edit balances, export/import data
+  - Add, edit, delete products dynamically
+  - Export/import all data as JSON
+  - Reset database (clear all data)
+  - Close panel with button or Escape key
 
 ---
 
 ## Usage
 
-1. **Open `index.html`** in a modern web browser (Chrome, Edge, Firefox).
-2. **Add products to the cart** by selecting quantity and clicking "Add to Cart".
-3. **Click "Proceed to Payment"** when ready.
-4. **Scan student RFID card** (or enter UID manually) in the payment modal.
-5. **Click "Confirm Payment"** to process the transaction.
-6. **Success message** will appear, and the cart will reset.
+1. **Open `index.html`** in a modern browser (Chrome, Edge, Firefox).
+2. **Add products to cart** by selecting quantity and clicking "Add to Cart".
+3. **Click "Proceed to Payment"**.
+4. **Scan student RFID card** or enter UID manually.
+5. **Click "Confirm Payment"** to process.
+6. **Success message** appears, cart resets.
 
 ---
 
 ## Admin Panel
 
-- Click the **"Admin Panel"** button at the top of the page.
-- View **student accounts** with current balances.
-- View **transaction history** with timestamps and details.
-- Close the panel with the **×** button.
+- Click **"Admin Panel"** button at the top.
+- **Student Accounts**:
+  - Search by name or UID
+  - Edit balances inline, click Save
+- **Transaction History**:
+  - View all past transactions
+- **Product Management**:
+  - Add new products with name and price
+  - Edit or delete existing products
+  - Changes reflect immediately in POS menu
+- **Data Export/Import**:
+  - Export all data as JSON backup
+  - Import JSON to restore data
+- **Reset Database**:
+  - Clears all data and resets app
+- **Close panel** with Exit button or Escape key
 
 ---
 
 ## Data Storage
 
-- Currently, all data (students, transactions) is stored **in-memory**.
-- Data **will reset** on page reload.
-- (Planned) Use **LocalStorage** for persistent offline data.
+- Uses **IndexedDB** for offline persistence
+- Data survives page reloads and browser restarts
+- Reset or import to clear/replace data
 
 ---
 
 ## Development Notes
 
-- Built with **vanilla JavaScript** and **Tailwind CSS** via CDN.
-- Designed for **offline use** in a browser environment.
-- RFID reader acts as a **keyboard emulator**, inputting the UID into a password field.
-- No backend server required.
+- Built with **vanilla JavaScript** and **Tailwind CSS**
+- Designed for **offline use** in browser or ElectronJS
+- RFID reader acts as **keyboard input**
+- No backend server required
 
 ---
 
 ## Future Improvements
 
-- Persistent data storage with LocalStorage or IndexedDB
-- Admin features: add/edit/delete students, manage products
-- Export/import data for backup
 - User authentication for admin access
-- Packaging as a standalone desktop app (e.g., Electron)
+- Packaging as a desktop app (Electron)
+- More detailed transaction reports
+- Role-based permissions
+- UI enhancements and accessibility
 
 ---
 
