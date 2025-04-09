@@ -546,6 +546,74 @@ document.addEventListener('DOMContentLoaded', () => {
     const adminTransactionList = document.getElementById('admin-transaction-list');
 
     if (adminButton && adminModal && closeAdminButton) {
+        // Top Up modal elements
+        const topupButton = document.getElementById('topup-button');
+        const topupModal = document.getElementById('topup-modal');
+        const topupUidInput = document.getElementById('topup-uid-input');
+        const topupStudentInfo = document.getElementById('topup-student-info');
+        const topupStudentName = document.getElementById('topup-student-name');
+        const topupStudentBalance = document.getElementById('topup-student-balance');
+        const topupAmountInput = document.getElementById('topup-amount');
+        const topupFeedback = document.getElementById('topup-feedback');
+        const topupCancelButton = document.getElementById('topup-cancel-button');
+        const topupConfirmButton = document.getElementById('topup-confirm-button');
+
+        if (topupButton && topupModal && topupUidInput && topupCancelButton && topupConfirmButton) {
+            topupButton.addEventListener('click', () => {
+                topupUidInput.value = '';
+                topupAmountInput.value = '';
+                topupStudentInfo.classList.add('hidden');
+                topupFeedback.textContent = '';
+                topupModal.classList.remove('hidden');
+                setTimeout(() => topupUidInput.focus(), 100);
+            });
+
+            topupCancelButton.addEventListener('click', () => {
+                topupModal.classList.add('hidden');
+            });
+
+            topupUidInput.addEventListener('change', async () => {
+                const uid = topupUidInput.value.trim();
+                const student = state.students[uid];
+                if (!student) {
+                    topupStudentInfo.classList.add('hidden');
+                    topupFeedback.textContent = 'Student not found.';
+                    topupFeedback.classList.add('text-red-600');
+                    return;
+                }
+                topupStudentName.textContent = student.name;
+                topupStudentBalance.textContent = student.balance.toFixed(2);
+                topupStudentInfo.classList.remove('hidden');
+                topupFeedback.textContent = '';
+                topupFeedback.classList.remove('text-red-600');
+            });
+
+            topupConfirmButton.addEventListener('click', async () => {
+                const uid = topupUidInput.value.trim();
+                const amount = parseFloat(topupAmountInput.value);
+                if (!uid || isNaN(amount) || amount <= 0) {
+                    topupFeedback.textContent = 'Enter valid UID and amount.';
+                    topupFeedback.classList.add('text-red-600');
+                    return;
+                }
+                const student = state.students[uid];
+                if (!student) {
+                    topupFeedback.textContent = 'Student not found.';
+                    topupFeedback.classList.add('text-red-600');
+                    return;
+                }
+                student.balance += amount;
+                await saveStudent({ uid, name: student.name, balance: student.balance });
+                topupStudentBalance.textContent = student.balance.toFixed(2);
+                topupFeedback.textContent = 'Top up successful!';
+                topupFeedback.classList.remove('text-red-600');
+                topupFeedback.classList.add('text-green-600');
+                renderAdminPanel();
+                setTimeout(() => {
+                    topupModal.classList.add('hidden');
+                }, 1000);
+            });
+        }
         adminButton.addEventListener('click', () => {
             console.log("Opening Admin Panel...");
             renderAdminPanel();
@@ -628,7 +696,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function renderAdminPanel(filter = '') {
+function renderAdminPanel(filter = '') {
         // Render students
         adminStudentList.innerHTML = '';
         for (const uid in state.students) {
@@ -644,35 +712,11 @@ document.addEventListener('DOMContentLoaded', () => {
             const info = document.createElement('div');
             info.innerHTML = `<strong>${student.name}</strong><br><span class="text-sm text-gray-600">UID: ${uid}</span>`;
 
-            const balanceDiv = document.createElement('div');
-            balanceDiv.className = 'flex items-center gap-2';
-
-            const balanceInput = document.createElement('input');
-            balanceInput.type = 'number';
-            balanceInput.value = student.balance.toFixed(2);
-            balanceInput.className = 'w-24 border border-gray-300 rounded p-1 text-right';
-
-            const saveBtn = document.createElement('button');
-            saveBtn.textContent = 'Save';
-            saveBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-sm';
-
-            saveBtn.addEventListener('click', async () => {
-                const newBalance = parseFloat(balanceInput.value);
-                if (isNaN(newBalance) || newBalance < 0) {
-                    alert('Invalid balance amount');
-                    return;
-                }
-                student.balance = newBalance;
-                await saveStudent({ uid, name: student.name, balance: newBalance });
-                alert('Balance updated');
-                renderAdminPanel(filter);
-            });
-
-            balanceDiv.appendChild(balanceInput);
-            balanceDiv.appendChild(saveBtn);
+            const balance = document.createElement('div');
+            balance.textContent = `Balance: ₱${student.balance.toFixed(2)}`;
 
             div.appendChild(info);
-            div.appendChild(balanceDiv);
+            div.appendChild(balance);
             adminStudentList.appendChild(div);
         }
 
@@ -781,12 +825,6 @@ document.addEventListener('DOMContentLoaded', () => {
             nameInput.value = '';
             priceInput.value = '';
             await renderProductList();
-            state.products = await getAllProducts();
-            loadProducts();
-            state.products = await getAllProducts();
-            loadProducts();
-            state.products = await getAllProducts();
-            loadProducts();
             state.products = await getAllProducts();
             loadProducts();
         };
@@ -916,6 +954,5 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     console.log("POS Application Initialized and Ready.");
-
 
 }); // End of DOMContentLoaded
