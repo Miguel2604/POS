@@ -3,13 +3,44 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Canteen POS</title>
+    <title>University Canteen POS</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
-        /* Optional: Add custom base styles or component styles here if needed */
-        /* Style for placeholder items - can be removed later */
-        .placeholder-item {
-            @apply border border-dashed border-gray-300 p-4 rounded text-center text-gray-500;
+        /* Custom styles for the POS system */
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+        }
+
+        .menu-item {
+            transition: transform 0.2s, box-shadow 0.2s;
+            position: relative;
+            overflow: hidden;
+        }
+
+        .menu-item:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
+        }
+        
+        .menu-item::after {
+            content: '';
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            width: 100%;
+            height: 3px;
+        }
+        
+        .blue-item::after {
+            background: linear-gradient(90deg, #3b82f6, #60a5fa);
+        }
+        
+        .green-item::after {
+            background: linear-gradient(90deg, #10b981, #34d399);
+        }
+        
+        .yellow-item::after {
+            background: linear-gradient(90deg, #f59e0b, #fbbf24);
         }
 
         /* Ensure modal is visually on top */
@@ -18,93 +49,157 @@
         }
 
         /* Add minimum height to prevent layout shifts */
-         #payment-feedback {
-             min-height: 1.5em; /* Adjust as needed */
-         }
+        #payment-feedback {
+             min-height: 1.5em;
+        }
+        
+        /* Hide scrollbar but allow scrolling */
+        .hide-scrollbar::-webkit-scrollbar {
+            display: none; /* for Chrome, Safari, and Opera */
+        }
+        
+        .hide-scrollbar {
+            -ms-overflow-style: none;  /* for Internet Explorer and Edge */
+            scrollbar-width: none;  /* for Firefox */
+        }
     </style>
 </head>
-<body class="bg-gray-100 font-sans"> <div class="container mx-auto p-4 min-h-screen flex flex-col">
+<body class="bg-gray-100 font-sans">
+    <div class="flex h-screen">
+        <!-- Left side - dark menu categories similar to the reference -->
+        <div class="w-full md:w-2/3 lg:w-3/4 bg-gray-900 p-4 flex flex-col">
+            <header class="flex items-center justify-between mb-4">
+                <h1 class="text-xl font-bold text-white">PAPAPRITOS</h1>
+                <div class="flex space-x-2">
+                    <button id="admin-button" class="text-white bg-gray-700 hover:bg-gray-800 px-3 py-1 rounded-lg text-sm">
+                        Admin Panel
+                    </button>
+                    <button id="topup-button" class="text-white bg-gray-700 hover:bg-gray-800 px-3 py-1 rounded-lg text-sm">
+                        Top Up
+                    </button>
+                </div>
+            </header>
 
-        <header class="mb-6">
-            <h1 class="text-3xl font-bold text-center text-gray-800">University Canteen POS</h1>
-            <div class="flex justify-center mt-4 gap-4">
-                <button id="admin-button" class="bg-gray-700 hover:bg-gray-800 text-white font-semibold py-2 px-4 rounded">
-                    Admin Panel
-                </button>
-                <button id="topup-button" class="bg-green-700 hover:bg-green-800 text-white font-semibold py-2 px-4 rounded">
-                    Top Up
-                </button>
+            <!-- Product list area with category styling -->
+            <div id="product-list" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 flex-grow overflow-y-auto hide-scrollbar">
+                <!-- Sample styled product items -->
+                <!-- Row 1 (Blue items) -->
+                <div class="menu-item blue-item bg-gray-800 border border-blue-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer">
+                    <span class="text-white font-medium text-center">Iced Coffee</span>
+                    <span class="text-blue-300 text-sm mt-1">₱45.00</span>
+                </div>
+                <div class="menu-item blue-item bg-gray-800 border border-blue-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer">
+                    <span class="text-white font-medium text-center">Lemonade</span>
+                    <span class="text-blue-300 text-sm mt-1">₱35.00</span>
+                </div>
+                <div class="menu-item blue-item bg-gray-800 border border-blue-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer">
+                    <span class="text-white font-medium text-center">Fruit Juice</span>
+                    <span class="text-blue-300 text-sm mt-1">₱40.00</span>
+                </div>
+                <div class="menu-item blue-item bg-gray-800 border border-blue-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer">
+                    <span class="text-white font-medium text-center">Iced Tea</span>
+                    <span class="text-blue-300 text-sm mt-1">₱30.00</span>
+                </div>
+
+                <!-- Row 2 (Green items) -->
+                <div class="menu-item green-item bg-gray-800 border border-green-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer">
+                    <span class="text-white font-medium text-center">Vanilla Cupcake</span>
+                    <span class="text-green-300 text-sm mt-1">₱25.00</span>
+                </div>
+                <div class="menu-item green-item bg-gray-800 border border-green-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer">
+                    <span class="text-white font-medium text-center">Fruit Cereal</span>
+                    <span class="text-green-300 text-sm mt-1">₱45.00</span>
+                </div>
+                <div class="menu-item green-item bg-gray-800 border border-green-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer">
+                    <span class="text-white font-medium text-center">Apple Pie Slice</span>
+                    <span class="text-green-300 text-sm mt-1">₱35.00</span>
+                </div>
+                <div class="menu-item green-item bg-gray-800 border border-green-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer">
+                    <span class="text-white font-medium text-center">Chocolate Muffin</span>
+                    <span class="text-green-300 text-sm mt-1">₱30.00</span>
+                </div>
+
+                <!-- Row 3 (Yellow items) -->
+                <div class="menu-item yellow-item bg-gray-800 border border-yellow-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer">
+                    <span class="text-white font-medium text-center">Chicken Wrap</span>
+                    <span class="text-yellow-300 text-sm mt-1">₱65.00</span>
+                </div>
+                <div class="menu-item yellow-item bg-gray-800 border border-yellow-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer">
+                    <span class="text-white font-medium text-center">Caesar Salad</span>
+                    <span class="text-yellow-300 text-sm mt-1">₱60.00</span>
+                </div>
+                <div class="menu-item yellow-item bg-gray-800 border border-yellow-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer">
+                    <span class="text-white font-medium text-center">Tomato Soup</span>
+                    <span class="text-yellow-300 text-sm mt-1">₱50.00</span>
+                </div>
+                <div class="menu-item yellow-item bg-gray-800 border border-yellow-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer">
+                    <span class="text-white font-medium text-center">French Bread</span>
+                    <span class="text-yellow-300 text-sm mt-1">₱40.00</span>
+                </div>
             </div>
-        </header>
+            
+            <!-- Small button for database reset - tucked away but accessible -->
+            <button id="reset-db-button" class="mt-2 bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-xs">
+                Reset Database
+            </button>
+        </div>
 
-        <main class="flex flex-grow flex-col md:flex-row gap-6">
-
-            <section class="w-full md:w-3/5 lg:w-2/3 bg-white p-4 rounded-lg shadow">
-                <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Menu / Products</h2>
-                <div id="product-list" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4">
-                    <div class="placeholder-item">Product Area 1</div>
-                    <div class="placeholder-item">Product Area 2</div>
-                    <div class="placeholder-item">Product Area 3</div>
-                    <div class="placeholder-item">Product Area 4</div>
+        <!-- Right side - order summary similar to the reference -->
+        <div class="hidden md:block md:w-1/3 lg:w-1/4 bg-white shadow-lg">
+            <div class="flex flex-col h-full">
+                <div class="p-4 border-b">
+                    <div class="flex justify-center items-center mb-2">
+                        <h2 class="text-lg font-bold">Order Summary</h2>
+                    </div>
                 </div>
-                <button id="reset-db-button" class="mt-4 bg-red-600 hover:bg-red-700 text-white px-3 py-2 rounded">
-                    Reset Database (Clear All Data)
-                </button>
-            </section>
-
-            <aside class="w-full md:w-2/5 lg:w-1/3 bg-white p-4 rounded-lg shadow flex flex-col">
-                <h2 class="text-2xl font-semibold mb-4 border-b pb-2">Current Order</h2>
-                <div id="cart-items" class="flex-grow overflow-y-auto mb-4 max-h-[50vh] md:max-h-full border-b pb-2">
+                
+                <!-- Cart items -->
+                <div id="cart-items" class="flex-grow overflow-y-auto p-4 hide-scrollbar">
                     <p class="text-gray-500 italic initial-cart-message">Cart is empty.</p>
+                    <!-- Cart items will be populated here via JavaScript -->
                 </div>
-                <div class="border-t pt-4">
-                    <div id="cart-summary" class="space-y-2 mb-4">
+                
+                <!-- Order summary and payment section -->
+                <div class="border-t p-4">
+                    <div id="cart-summary" class="space-y-2">
                         <div class="flex justify-between">
-                            <span>Subtotal:</span>
+                            <span>Subtotal</span>
                             <span id="cart-subtotal">₱0.00</span>
                         </div>
                         <div class="flex justify-between font-bold text-lg">
-                            <span>Total:</span>
+                            <span>Total</span>
                             <span id="cart-total">₱0.00</span>
                         </div>
                     </div>
-                    <button id="pay-button" type="button" class="w-full bg-green-600 hover:bg-green-700 text-white font-bold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                        Proceed to Payment
-                    </button>
-                     <button id="clear-cart-button" type="button" class="w-full bg-red-500 hover:bg-red-600 text-white font-bold py-2 px-4 rounded-lg transition duration-200 mt-2 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
-                        Clear Cart
-                    </button>
-                </div>
-            </aside>
-
-        </main>
-
-        <div id="payment-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden">
-             <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm">
-                <h3 class="text-xl font-semibold mb-4">Scan Student ID</h3>
-                <p class="text-sm text-gray-600 mb-4">Place the student ID card near the RFID reader.</p>
-                <input type="password" id="rfid-input" class="w-full border border-gray-300 p-3 rounded mb-4 text-center text-lg" placeholder="Waiting for ID scan...">
-                <div id="student-info" class="mb-4 hidden text-center"> <p>Student: <span id="student-name" class="font-medium"></span></p>
-                    <p>Balance: <span id="student-balance" class="font-medium"></span></p>
-                </div>
-                 <div id="payment-feedback" class="mb-4 text-center font-medium"></div> <div class="flex justify-end space-x-3">
-                    <button id="cancel-payment-button" type="button" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">Cancel</button>
-                    <button id="confirm-payment-button" type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed" disabled>Confirm Payment</button>
+                    <div class="flex items-center justify-between mt-4 gap-2">
+                        <button id="clear-cart-button" class="flex-1 bg-red-500 hover:bg-red-600 text-white font-medium py-2 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed" disabled>
+                            Clear
+                        </button>
+                        <button id="pay-button" class="flex-2 bg-green-500 hover:bg-green-600 text-white font-bold py-3 px-4 rounded-lg transition duration-200 disabled:opacity-50 disabled:cursor-not-allowed w-2/3" disabled>
+                            CHARGE
+                        </button>
+                    </div>
                 </div>
             </div>
         </div>
-
-        <div id="success-message" class="fixed bottom-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg hidden">
-             </div>
-
-        <div id="error-message" class="fixed bottom-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg hidden">
-             </div>
-
     </div>
 
-    <!-- Loading Overlay -->
-    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
-        <div class="text-white text-xl font-semibold">Loading...</div>
+    <!-- Payment Modal -->
+    <div id="payment-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden">
+        <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm">
+            <h3 class="text-xl font-semibold mb-4">Scan Student ID</h3>
+            <p class="text-sm text-gray-600 mb-4">Place the student ID card near the RFID reader.</p>
+            <input type="password" id="rfid-input" class="w-full border border-gray-300 p-3 rounded mb-4 text-center text-lg" placeholder="Waiting for ID scan...">
+            <div id="student-info" class="mb-4 hidden text-center">
+                <p>Student: <span id="student-name" class="font-medium"></span></p>
+                <p>Balance: <span id="student-balance" class="font-medium"></span></p>
+            </div>
+            <div id="payment-feedback" class="mb-4 text-center font-medium"></div>
+            <div class="flex justify-end space-x-3">
+                <button id="cancel-payment-button" type="button" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">Cancel</button>
+                <button id="confirm-payment-button" type="button" class="bg-blue-600 hover:bg-blue-700 text-white font-bold py-2 px-4 rounded disabled:opacity-50 disabled:cursor-not-allowed" disabled>Confirm Payment</button>
+            </div>
+        </div>
     </div>
 
     <!-- Admin Panel Modal -->
@@ -176,7 +271,18 @@
         </div>
     </div>
 
-    <script src="js/app.js" defer></script>
+    <!-- Success and Error Messages -->
+    <div id="success-message" class="fixed bottom-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg hidden">
+    </div>
 
+    <div id="error-message" class="fixed bottom-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg hidden">
+    </div>
+
+    <!-- Loading Overlay -->
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+        <div class="text-white text-xl font-semibold">Loading...</div>
+    </div>
+
+    <script src="js/app.js" defer></script>
 </body>
 </html>

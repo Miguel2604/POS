@@ -219,39 +219,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
         state.products = await getAllProducts();
 
+        const colors = ['blue', 'green', 'yellow'];
+        let colorIndex = 0;
+
         state.products.forEach(product => {
+            const color = colors[colorIndex % colors.length];
+            colorIndex++;
+
             const productCard = document.createElement('div');
-            productCard.className = 'border rounded-lg p-2 flex flex-col items-center shadow hover:shadow-md transition';
+            productCard.className = `menu-item ${color}-item bg-gray-800 border border-${color}-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer`;
 
-            const name = document.createElement('div');
-            name.className = 'font-semibold mb-1 text-center';
-            name.textContent = product.name;
+            const nameSpan = document.createElement('span');
+            nameSpan.className = 'text-white font-medium text-center';
+            nameSpan.textContent = product.name;
 
-            const price = document.createElement('div');
-            price.className = 'text-gray-700 mb-2';
-            price.textContent = `₱${product.price.toFixed(2)}`;
+            const priceSpan = document.createElement('span');
+            priceSpan.className = `text-${color}-300 text-sm mt-1`;
+            priceSpan.textContent = `₱${product.price.toFixed(2)}`;
 
-            const qtyInput = document.createElement('input');
-            qtyInput.type = 'number';
-            qtyInput.min = '1';
-            qtyInput.value = '1';
-            qtyInput.className = 'w-16 border border-gray-300 rounded mb-2 text-center';
+            productCard.appendChild(nameSpan);
+            productCard.appendChild(priceSpan);
 
-            const addButton = document.createElement('button');
-            addButton.className = 'bg-blue-600 hover:bg-blue-700 text-white px-3 py-1 rounded transition';
-            addButton.textContent = 'Add to Cart';
-
-            addButton.addEventListener('click', () => {
-                const quantity = parseInt(qtyInput.value, 10);
-                if (quantity > 0) {
-                    addToCart(product, quantity);
-                }
+            productCard.addEventListener('click', () => {
+                addToCart(product, 1);
             });
-
-            productCard.appendChild(name);
-            productCard.appendChild(price);
-            productCard.appendChild(qtyInput);
-            productCard.appendChild(addButton);
 
             ui.productListDiv.appendChild(productCard);
         });
