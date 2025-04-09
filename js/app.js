@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function    saveStudent(student) {
+    function saveStudent(student) {
         return new Promise((resolve, reject) => {
             const tx = db.transaction('students', 'readwrite');
             const store = tx.objectStore('students');
@@ -468,7 +468,6 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCartDisplay(); // Call update to refresh UI (implementation pending)
     }
 
-
     // --- UI Helper Functions ---
 
     function showLoading() {
@@ -480,7 +479,6 @@ document.addEventListener('DOMContentLoaded', () => {
         const overlay = document.getElementById('loading-overlay');
         if (overlay) overlay.classList.add('hidden');
     }
-
 
     function openPaymentModal() {
         if (!ui.paymentModal) return;
@@ -526,210 +524,150 @@ document.addEventListener('DOMContentLoaded', () => {
         }, duration);
     }
 
+    // --- Define both panel rendering functions BEFORE any event listeners ---
+    // This is the key fix for the menu panel issue
+    
+    // Menu Panel Rendering
+    async function renderMenuPanel() {
+        console.log("Rendering menu panel");
+        
+        // Render products
+        const productListDiv = document.getElementById('admin-product-list');
+        const addProductForm = document.getElementById('admin-add-product-form');
+        if (!productListDiv || !addProductForm) return;
 
-    // --- Event Listeners ---
+        async function renderProductList() {
+            const products = await getAllProducts();
+            productListDiv.innerHTML = '';
+            products.forEach(product => {
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center border p-2 rounded gap-2';
 
-    // Admin Panel open/close
-    const adminButton = document.getElementById('admin-button');
-    const adminModal = document.getElementById('admin-modal');
-    const closeAdminButton = document.getElementById('close-admin-button');
-    const adminStudentList = document.getElementById('admin-student-list');
-    const adminTransactionList = document.getElementById('admin-transaction-list');
+                const infoDiv = document.createElement('div');
+                infoDiv.className = 'flex-1 flex gap-2';
 
-    if (adminButton && adminModal && closeAdminButton) {
-        // Top Up modal elements
-        const topupButton = document.getElementById('topup-button');
-        const topupModal = document.getElementById('topup-modal');
-        const topupUidInput = document.getElementById('topup-uid-input');
-        const topupStudentInfo = document.getElementById('topup-student-info');
-        const topupStudentName = document.getElementById('topup-student-name');
-        const topupStudentBalance = document.getElementById('topup-student-balance');
-        const topupAmountInput = document.getElementById('topup-amount');
-        const topupFeedback = document.getElementById('topup-feedback');
-        const topupCancelButton = document.getElementById('topup-cancel-button');
-        const topupConfirmButton = document.getElementById('topup-confirm-button');
+                const nameInput = document.createElement('input');
+                nameInput.type = 'text';
+                nameInput.value = product.name;
+                nameInput.className = 'flex-1 border border-gray-300 rounded p-1';
 
-        if (topupButton && topupModal && topupUidInput && topupCancelButton && topupConfirmButton) {
-            topupButton.addEventListener('click', () => {
-                topupUidInput.value = '';
-                topupAmountInput.value = '';
-                topupStudentInfo.classList.add('hidden');
-                topupFeedback.textContent = '';
-                topupModal.classList.remove('hidden');
-                setTimeout(() => topupUidInput.focus(), 100);
-            });
+                const priceInput = document.createElement('input');
+                priceInput.type = 'number';
+                priceInput.value = product.price.toFixed(2);
+                priceInput.className = 'w-24 border border-gray-300 rounded p-1 text-right';
 
-            topupCancelButton.addEventListener('click', () => {
-                topupModal.classList.add('hidden');
-            });
+                infoDiv.appendChild(nameInput);
+                infoDiv.appendChild(priceInput);
 
-            topupUidInput.addEventListener('change', async () => {
-                const uid = topupUidInput.value.trim();
-                const student = state.students[uid];
-                if (!student) {
-                    topupStudentInfo.classList.add('hidden');
-                    topupFeedback.textContent = 'Student not found.';
-                    topupFeedback.classList.add('text-red-600');
-                    return;
-                }
-                topupStudentName.textContent = student.name;
-                topupStudentBalance.textContent = student.balance.toFixed(2);
-                topupStudentInfo.classList.remove('hidden');
-                topupFeedback.textContent = '';
-                topupFeedback.classList.remove('text-red-600');
-            });
-
-            topupConfirmButton.addEventListener('click', async () => {
-                const uid = topupUidInput.value.trim();
-                const amount = parseFloat(topupAmountInput.value);
-                if (!uid || isNaN(amount) || amount <= 0) {
-                    topupFeedback.textContent = 'Enter valid UID and amount.';
-                    topupFeedback.classList.add('text-red-600');
-                    return;
-                }
-                const student = state.students[uid];
-                if (!student) {
-                    topupFeedback.textContent = 'Student not found.';
-                    topupFeedback.classList.add('text-red-600');
-                    return;
-                }
-                student.balance += amount;
-                await saveStudent({ uid, name: student.name, balance: student.balance });
-                topupStudentBalance.textContent = student.balance.toFixed(2);
-                topupFeedback.textContent = 'Top up successful!';
-                topupFeedback.classList.remove('text-red-600');
-                topupFeedback.classList.add('text-green-600');
-                renderAdminPanel();
-                setTimeout(() => {
-                    topupModal.classList.add('hidden');
-                }, 1000);
-            });
-        }
-        adminButton.addEventListener('click', () => {
-            console.log("Opening Admin Panel...");
-            renderAdminPanel();
-            adminModal.classList.remove('hidden');
-        });
-
-        closeAdminButton.addEventListener('click', () => {
-            console.log("Closing Admin Panel...");
-            adminModal.classList.add('hidden');
-        });
-
-        const exitAdminButton = document.getElementById('exit-admin-button');
-        if (exitAdminButton) {
-            exitAdminButton.addEventListener('click', () => {
-                console.log("Exiting Admin Panel...");
-                adminModal.classList.add('hidden');
-            });
-            const exportBtn = document.getElementById('export-data-button');
-        const importInput = document.getElementById('import-data-input');
-
-        if (exportBtn) {
-            exportBtn.addEventListener('click', async () => {
-                const students = await getAllStudents();
-                const transactions = await getAllTransactions();
-                const data = { students, transactions };
-                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
-                const url = URL.createObjectURL(blob);
-                const a = document.createElement('a');
-                a.href = url;
-                a.download = 'canteen_pos_backup.json';
-                document.body.appendChild(a);
-                a.click();
-                document.body.removeChild(a);
-                URL.revokeObjectURL(url);
-            });
-            const resetDbButton = document.getElementById('reset-db-button');
-        if (resetDbButton) {
-            resetDbButton.addEventListener('click', () => {
-                if (confirm('Are you sure you want to delete ALL data? This cannot be undone.')) {
-                    indexedDB.deleteDatabase(dbName);
-                    alert('Database reset. Reloading...');
-                    location.reload();
-                }
-            });
-        }
-    }
-
-        if (importInput) {
-            importInput.addEventListener('change', async (event) => {
-                const file = event.target.files[0];
-                if (!file) return;
-                const text = await file.text();
-                try {
-                    const data = JSON.parse(text);
-                    if (data.students && Array.isArray(data.students)) {
-                        for (const s of data.students) {
-                            await saveStudent(s);
-                        }
+                const saveBtn = document.createElement('button');
+                saveBtn.textContent = 'Save';
+                saveBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-sm';
+                saveBtn.addEventListener('click', async () => {
+                    const newName = nameInput.value.trim();
+                    const newPrice = parseFloat(priceInput.value);
+                    if (!newName || isNaN(newPrice) || newPrice < 0) {
+                        alert('Invalid product data');
+                        return;
                     }
-                    if (data.transactions && Array.isArray(data.transactions)) {
-                        for (const t of data.transactions) {
-                            await saveTransaction(t);
-                        }
+                    await saveProduct({ id: product.id, name: newName, price: newPrice });
+                    alert('Product updated');
+                    renderProductList();
+                    loadProducts();
+                });
+
+                const deleteBtn = document.createElement('button');
+                deleteBtn.textContent = 'Delete';
+                deleteBtn.className = 'bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-sm';
+                deleteBtn.addEventListener('click', async () => {
+                    if (confirm('Delete this product?')) {
+                        await deleteProduct(product.id);
+                        alert('Product deleted');
+                        renderProductList();
+                        loadProducts();
                     }
-                    alert('Data imported successfully');
-                    location.reload();
-                } catch (e) {
-                    console.error('Import error:', e);
-                    alert('Failed to import data: ' + e.message);
-                }
+                });
+
+                div.appendChild(infoDiv);
+                div.appendChild(saveBtn);
+                div.appendChild(deleteBtn);
+
+                productListDiv.appendChild(div);
             });
         }
-    }
 
-        const searchInput = document.getElementById('admin-student-search');
-        if (searchInput) {
-            searchInput.addEventListener('input', () => {
-                renderAdminPanel(searchInput.value.trim().toLowerCase());
-            });
-        }
-    }
+        await renderProductList();
 
-function renderAdminPanel(filter = '') {
-        // Render students
-        adminStudentList.innerHTML = '';
-        for (const uid in state.students) {
-            const student = state.students[uid];
-            const nameLower = student.name.toLowerCase();
-            if (filter && !uid.toLowerCase().includes(filter) && !nameLower.includes(filter)) {
-                continue;
+        addProductForm.onsubmit = async (e) => {
+            e.preventDefault();
+            const nameInput = document.getElementById('admin-product-name');
+            const priceInput = document.getElementById('admin-product-price');
+            const name = nameInput.value.trim();
+            const price = parseFloat(priceInput.value);
+            if (!name || isNaN(price) || price < 0) {
+                alert('Invalid product data');
+                return;
             }
+            const id = 'prod_' + Date.now();
+            await saveProduct({ id, name, price });
+            alert('Product added');
+            nameInput.value = '';
+            priceInput.value = '';
+            await renderProductList();
+            loadProducts();
+        };
+    }
+    
+    // Admin Panel Rendering
+    function renderAdminPanel(filter = '') {
+        // Render students
+        const adminStudentList = document.getElementById('admin-student-list');
+        const adminTransactionList = document.getElementById('admin-transaction-list');
+        
+        if (adminStudentList) {
+            adminStudentList.innerHTML = '';
+            for (const uid in state.students) {
+                const student = state.students[uid];
+                const nameLower = student.name.toLowerCase();
+                if (filter && !uid.toLowerCase().includes(filter) && !nameLower.includes(filter)) {
+                    continue;
+                }
 
-            const div = document.createElement('div');
-            div.className = 'flex justify-between items-center border p-2 rounded gap-2';
+                const div = document.createElement('div');
+                div.className = 'flex justify-between items-center border p-2 rounded gap-2';
 
-            const info = document.createElement('div');
-            info.innerHTML = `<strong>${student.name}</strong><br><span class="text-sm text-gray-600">UID: ${uid}</span>`;
+                const info = document.createElement('div');
+                info.innerHTML = `<strong>${student.name}</strong><br><span class="text-sm text-gray-600">UID: ${uid}</span>`;
 
-            const balance = document.createElement('div');
-            balance.textContent = `Balance: ₱${student.balance.toFixed(2)}`;
+                const balance = document.createElement('div');
+                balance.textContent = `Balance: ₱${student.balance.toFixed(2)}`;
 
-            div.appendChild(info);
-            div.appendChild(balance);
-            adminStudentList.appendChild(div);
+                div.appendChild(info);
+                div.appendChild(balance);
+                adminStudentList.appendChild(div);
+            }
         }
 
         // Render transactions
-        adminTransactionList.innerHTML = '';
-        if (state.transactions.length === 0) {
-            adminTransactionList.innerHTML = '<p class="text-gray-500 italic">No transactions yet.</p>';
-        } else {
-            state.transactions.slice().reverse().forEach(tx => {
-                const div = document.createElement('div');
-                div.className = 'border p-2 rounded';
+        if (adminTransactionList) {
+            adminTransactionList.innerHTML = '';
+            if (state.transactions.length === 0) {
+                adminTransactionList.innerHTML = '<p class="text-gray-500 italic">No transactions yet.</p>';
+            } else {
+                state.transactions.slice().reverse().forEach(tx => {
+                    const div = document.createElement('div');
+                    div.className = 'border p-2 rounded';
 
-                div.innerHTML = `<strong>${tx.timestamp}</strong><br>
-                    Student UID: ${tx.studentUid}<br>
-                    Total: ₱${tx.totalAmount.toFixed(2)}<br>
-                    Items: ${tx.items.map(i => `${i.name} x${i.quantity}`).join(', ')}`;
+                    div.innerHTML = `<strong>${tx.timestamp}</strong><br>
+                        Student UID: ${tx.studentUid}<br>
+                        Total: ₱${tx.totalAmount.toFixed(2)}<br>
+                        Items: ${tx.items.map(i => `${i.name} x${i.quantity}`).join(', ')}`;
 
-                adminTransactionList.appendChild(div);
-            });
+                    adminTransactionList.appendChild(div);
+                });
+            }
         }
 
-        // Render products
+        // Render products in admin panel
         const productListDiv = document.getElementById('admin-product-list');
         const addProductForm = document.getElementById('admin-add-product-form');
         if (!productListDiv || !addProductForm) return;
@@ -829,6 +767,212 @@ function renderAdminPanel(filter = '') {
         });
     }
 
+    // --- Event Listeners ---
+
+    // Admin Panel open/close
+    const adminButton = document.getElementById('admin-button');
+    const adminModal = document.getElementById('admin-modal');
+    const closeAdminButton = document.getElementById('close-admin-button');
+    const adminStudentList = document.getElementById('admin-student-list');
+    const adminTransactionList = document.getElementById('admin-transaction-list');
+
+    const menuButton = document.getElementById('menu-button');
+    const menuModal = document.getElementById('menu-modal');
+    const closeMenuButton = document.getElementById('close-menu-button');
+
+    console.log("Setting up Manage Menu event listeners", { menuButton, menuModal, closeMenuButton });
+
+    // Set up menu button event listeners
+    if (menuButton && menuModal && closeMenuButton) {
+        menuButton.addEventListener('click', () => {
+            console.log("Manage Menu button clicked");
+            renderMenuPanel();
+            menuModal.classList.remove('hidden');
+        });
+
+        closeMenuButton.addEventListener('click', () => {
+            console.log("Closing Menu Management...");
+            menuModal.classList.add('hidden');
+        });
+
+        const exitMenuButton = document.getElementById('exit-menu-button');
+        if (exitMenuButton) {
+            exitMenuButton.addEventListener('click', () => {
+                console.log("Exiting Menu Management...");
+                menuModal.classList.add('hidden');
+            });
+        }
+
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape' && !menuModal.classList.contains('hidden')) {
+                console.log("Closing Menu Management via Escape key");
+                menuModal.classList.add('hidden');
+            }
+        });
+    }
+
+    if (adminButton && adminModal && closeAdminButton) {
+        // Top Up modal elements
+        const topupButton = document.getElementById('topup-button');
+        const topupModal = document.getElementById('topup-modal');
+        const topupUidInput = document.getElementById('topup-uid-input');
+        const topupStudentInfo = document.getElementById('topup-student-info');
+        const topupStudentName = document.getElementById('topup-student-name');
+        const topupStudentBalance = document.getElementById('topup-student-balance');
+        const topupAmountInput = document.getElementById('topup-amount');
+        const topupFeedback = document.getElementById('topup-feedback');
+        const topupCancelButton = document.getElementById('topup-cancel-button');
+        const topupConfirmButton = document.getElementById('topup-confirm-button');
+
+        if (topupButton && topupModal && topupUidInput && topupCancelButton && topupConfirmButton) {
+            topupButton.addEventListener('click', () => {
+                const pin = prompt('Enter PIN to access Top Up:');
+                if (pin !== '1234') {
+                    alert('Incorrect PIN. Access denied.');
+                    return;
+                }
+                
+                // IMPORTANT: No renderMenuPanel definition here anymore (moved to global scope)
+                
+                topupUidInput.value = '';
+                topupAmountInput.value = '';
+                topupStudentInfo.classList.add('hidden');
+                topupFeedback.textContent = '';
+                topupModal.classList.remove('hidden');
+                setTimeout(() => topupUidInput.focus(), 100);
+            });
+
+            topupCancelButton.addEventListener('click', () => {
+                topupModal.classList.add('hidden');
+            });
+
+            topupUidInput.addEventListener('change', async () => {
+                const uid = topupUidInput.value.trim();
+                const student = state.students[uid];
+                if (!student) {
+                    topupStudentInfo.classList.add('hidden');
+                    topupFeedback.textContent = 'Student not found.';
+                    topupFeedback.classList.add('text-red-600');
+                    return;
+                }
+                topupStudentName.textContent = student.name;
+                topupStudentBalance.textContent = student.balance.toFixed(2);
+                topupStudentInfo.classList.remove('hidden');
+                topupFeedback.textContent = '';
+                topupFeedback.classList.remove('text-red-600');
+            });
+
+            topupConfirmButton.addEventListener('click', async () => {
+                const uid = topupUidInput.value.trim();
+                const amount = parseFloat(topupAmountInput.value);
+                if (!uid || isNaN(amount) || amount <= 0) {
+                    topupFeedback.textContent = 'Enter valid UID and amount.';
+                    topupFeedback.classList.add('text-red-600');
+                    return;
+                }
+                const student = state.students[uid];
+                if (!student) {
+                    topupFeedback.textContent = 'Student not found.';
+                    topupFeedback.classList.add('text-red-600');
+                    return;
+                }
+                student.balance += amount;
+                await saveStudent({ uid, name: student.name, balance: student.balance });
+                topupStudentBalance.textContent = student.balance.toFixed(2);
+                topupFeedback.textContent = 'Top up successful!';
+                topupFeedback.classList.remove('text-red-600');
+                topupFeedback.classList.add('text-green-600');
+                renderAdminPanel();
+                setTimeout(() => {
+                    topupModal.classList.add('hidden');
+                }, 1000);
+            });
+        }
+        
+        adminButton.addEventListener('click', () => {
+            console.log("Opening Admin Panel...");
+            renderAdminPanel();
+            adminModal.classList.remove('hidden');
+        });
+
+        closeAdminButton.addEventListener('click', () => {
+            console.log("Closing Admin Panel...");
+            adminModal.classList.add('hidden');
+        });
+
+        const exitAdminButton = document.getElementById('exit-admin-button');
+        if (exitAdminButton) {
+            exitAdminButton.addEventListener('click', () => {
+                console.log("Exiting Admin Panel...");
+                adminModal.classList.add('hidden');
+            });
+        }
+        
+        const exportBtn = document.getElementById('export-data-button');
+        const importInput = document.getElementById('import-data-input');
+
+        if (exportBtn) {
+            exportBtn.addEventListener('click', async () => {
+                const students = await getAllStudents();
+                const transactions = await getAllTransactions();
+                const data = { students, transactions };
+                const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+                const url = URL.createObjectURL(blob);
+                const a = document.createElement('a');
+                a.href = url;
+                a.download = 'canteen_pos_backup.json';
+                document.body.appendChild(a);
+                a.click();
+                document.body.removeChild(a);
+                URL.revokeObjectURL(url);
+            });
+        }
+        
+        const resetDbButton = document.getElementById('reset-db-button');
+        if (resetDbButton) {
+            resetDbButton.addEventListener('click', () => {
+                if (confirm('Are you sure you want to delete ALL data? This cannot be undone.')) {
+                    indexedDB.deleteDatabase(dbName);
+                    alert('Database reset. Reloading...');
+                    location.reload();
+                }
+            });
+        }
+
+        if (importInput) {
+            importInput.addEventListener('change', async (event) => {
+                const file = event.target.files[0];
+                if (!file) return;
+                const text = await file.text();
+                try {
+                    const data = JSON.parse(text);
+                    if (data.students && Array.isArray(data.students)) {
+                        for (const s of data.students) {
+                            await saveStudent(s);
+                        }
+                    }
+                    if (data.transactions && Array.isArray(data.transactions)) {
+                        for (const t of data.transactions) {
+                            await saveTransaction(t);
+                        }
+                    }
+                    alert('Data imported successfully');
+                    location.reload();
+                } catch (e) {
+                    console.error('Import error:', e);
+                    alert('Failed to import data: ' + e.message);
+                }
+            });
+        }
+        
+        const searchInput = document.getElementById('admin-student-search');
+        if (searchInput) {
+            searchInput.addEventListener('input', () => {
+                renderAdminPanel(searchInput.value.trim().toLowerCase());
+            });
+        }
+    }
+
     // Pay Button -> Open Modal
     if (ui.payButton) {
         ui.payButton.addEventListener('click', openPaymentModal);
@@ -894,7 +1038,6 @@ function renderAdminPanel(filter = '') {
     } else {
         console.error("Confirm Payment button not found!");
     }
-
 
     // --- Initialization ---
     console.log("Initializing application data and UI...");
