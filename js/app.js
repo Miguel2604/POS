@@ -78,7 +78,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    function saveStudent(student) {
+    function    saveStudent(student) {
         return new Promise((resolve, reject) => {
             const tx = db.transaction('students', 'readwrite');
             const store = tx.objectStore('students');
@@ -213,9 +213,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // --- Core Functions (Placeholders - to be implemented in Step 3 onwards) ---
 
-    function loadProducts() {
+    async function loadProducts() {
         console.log("Loading products into UI...");
         ui.productListDiv.innerHTML = '';
+
+        state.products = await getAllProducts();
 
         state.products.forEach(product => {
             const productCard = document.createElement('div');
@@ -375,9 +377,11 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    function processPayment() {
+    async function processPayment() {
         console.log("Processing payment...");
+        showLoading();
 
+        try {
         // Always perform a fresh scan using current RFID input value
         const uid = ui.rfidInput.value.trim();
         console.log("Scanning UID during payment:", uid);
@@ -457,6 +461,13 @@ document.addEventListener('DOMContentLoaded', () => {
 
         console.log("Payment processed successfully:", transaction);
         state.paymentInProgress = false;
+        } catch (error) {
+            console.error("Payment error:", error);
+            showNotification("Payment failed: " + error.message, "error");
+            state.paymentInProgress = false;
+        } finally {
+            hideLoading();
+        }
     }
 
     function clearCart() {
@@ -468,6 +479,17 @@ document.addEventListener('DOMContentLoaded', () => {
 
 
     // --- UI Helper Functions ---
+
+    function showLoading() {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) overlay.classList.remove('hidden');
+    }
+
+    function hideLoading() {
+        const overlay = document.getElementById('loading-overlay');
+        if (overlay) overlay.classList.add('hidden');
+    }
+
 
     function openPaymentModal() {
         if (!ui.paymentModal) return;
@@ -745,15 +767,26 @@ document.addEventListener('DOMContentLoaded', () => {
             const name = nameInput.value.trim();
             const price = parseFloat(priceInput.value);
             if (!name || isNaN(price) || price < 0) {
-                alert('Invalid product data');
+                showNotification('Invalid product data', 'error');
                 return;
             }
             const id = 'prod_' + Date.now();
-            await saveProduct({ id, name, price });
-            alert('Product added');
+            try {
+                await saveProduct({ id, name, price });
+                showNotification('Product added successfully', 'success');
+            } catch (error) {
+                console.error('Add product error:', error);
+                showNotification('Failed to add product', 'error');
+            }
             nameInput.value = '';
             priceInput.value = '';
             await renderProductList();
+            state.products = await getAllProducts();
+            loadProducts();
+            state.products = await getAllProducts();
+            loadProducts();
+            state.products = await getAllProducts();
+            loadProducts();
             state.products = await getAllProducts();
             loadProducts();
         };
