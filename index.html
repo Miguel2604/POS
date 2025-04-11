@@ -299,6 +299,19 @@
         </div>
     </div>
 
-    <script src="js/app.js" defer></script>
+<!-- PIN Modal -->
+<div id="pin-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden z-50">
+  <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+    <h2 class="text-2xl font-bold mb-4 text-center">Enter PIN</h2>
+    <input type="password" id="pin-input" class="w-full border border-gray-300 rounded p-3 mb-4 text-center text-lg" placeholder="Enter PIN">
+    <div id="pin-feedback" class="mb-4 text-center font-medium text-red-600"></div>
+    <div class="flex justify-end gap-2">
+      <button id="pin-cancel-button" class="bg-gray-500 hover:bg-gray-600 text-white px-4 py-2 rounded">Cancel</button>
+      <button id="pin-confirm-button" class="bg-blue-600 hover:bg-blue-700 text-white px-4 py-2 rounded">Confirm</button>
+    </div>
+  </div>
+</div>
+
+<script src="js/app.js" defer></script>
 </body>
 </html>

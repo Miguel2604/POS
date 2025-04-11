@@ -813,33 +813,73 @@ document.addEventListener('DOMContentLoaded', () => {
 
     if (adminButton && adminModal && closeAdminButton) {
         // Top Up modal elements
-        const topupButton = document.getElementById('topup-button');
-        const topupModal = document.getElementById('topup-modal');
-        const topupUidInput = document.getElementById('topup-uid-input');
-        const topupStudentInfo = document.getElementById('topup-student-info');
-        const topupStudentName = document.getElementById('topup-student-name');
-        const topupStudentBalance = document.getElementById('topup-student-balance');
-        const topupAmountInput = document.getElementById('topup-amount');
-        const topupFeedback = document.getElementById('topup-feedback');
-        const topupCancelButton = document.getElementById('topup-cancel-button');
-        const topupConfirmButton = document.getElementById('topup-confirm-button');
+    const topupButton = document.getElementById('topup-button');
+    const topupModal = document.getElementById('topup-modal');
+    const topupUidInput = document.getElementById('topup-uid-input');
+    const topupStudentInfo = document.getElementById('topup-student-info');
+    const topupStudentName = document.getElementById('topup-student-name');
+    const topupStudentBalance = document.getElementById('topup-student-balance');
+    const topupAmountInput = document.getElementById('topup-amount');
+    const topupFeedback = document.getElementById('topup-feedback');
+    const topupCancelButton = document.getElementById('topup-cancel-button');
+    const topupConfirmButton = document.getElementById('topup-confirm-button');
 
-        if (topupButton && topupModal && topupUidInput && topupCancelButton && topupConfirmButton) {
-            topupButton.addEventListener('click', () => {
-                const pin = prompt('Enter PIN to access Top Up:');
-                if (pin !== '1234') {
-                    alert('Incorrect PIN. Access denied.');
-                    return;
-                }
+    const pinModal = document.getElementById('pin-modal');
+    const pinInput = document.getElementById('pin-input');
+    const pinFeedback = document.getElementById('pin-feedback');
+    const pinCancelButton = document.getElementById('pin-cancel-button');
+    const pinConfirmButton = document.getElementById('pin-confirm-button');
+    const ADMIN_PIN = "1234"; 
+
+    if (pinCancelButton) {
+        pinCancelButton.addEventListener('click', () => {
+            pinModal.classList.add('hidden');
+        });
+    }
+
+    if (pinConfirmButton) {
+        pinConfirmButton.addEventListener('click', () => {
+            const enteredPin = pinInput.value.trim();
+            if (enteredPin === ADMIN_PIN) {
+                // PIN is correct, hide PIN modal and show topup modal
+                pinModal.classList.add('hidden');
                 
-                // IMPORTANT: No renderMenuPanel definition here anymore (moved to global scope)
-                
+                // Clear topup form fields
                 topupUidInput.value = '';
                 topupAmountInput.value = '';
                 topupStudentInfo.classList.add('hidden');
                 topupFeedback.textContent = '';
+                
+                // Show topup modal
                 topupModal.classList.remove('hidden');
                 setTimeout(() => topupUidInput.focus(), 100);
+            } else {
+                // PIN is incorrect
+                pinFeedback.textContent = 'Incorrect PIN. Please try again.';
+            }
+        });
+    }
+
+    // Also handle Enter key press in PIN input
+    if (pinInput) {
+        pinInput.addEventListener('keypress', (event) => {
+            if (event.key === 'Enter' || event.keyCode === 13) {
+                event.preventDefault();
+                pinConfirmButton.click(); // Simulate a click on the confirm button
+            }
+        });
+        
+        // Clear error message when typing
+        pinInput.addEventListener('input', () => {
+            pinFeedback.textContent = '';
+        });
+    }
+        if (topupButton && topupModal && topupUidInput && topupCancelButton && topupConfirmButton) {
+            topupButton.addEventListener('click', () => {
+                pinInput.value = '';
+                pinFeedback.textContent = '';
+                pinModal.classList.remove('hidden');
+                setTimeout(() => pinInput.focus(), 100);
             });
 
             topupCancelButton.addEventListener('click', () => {
