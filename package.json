@@ -1,13 +1,17 @@
 {
   "name": "canteen-pos-electron",
   "version": "1.0.0",
-  "description": "University Canteen POS wrapped in Electron",
+  "description": "University Canteen POS wrapped in Electron with Supabase integration",
   "main": "main.js",
   "scripts": {
-    "start": "electron ."
+    "start": "electron .",
+    "install-deps": "npm install"
   },
   "author": "",
   "license": "MIT",
+  "dependencies": {
+    "@supabase/supabase-js": "^2.49.4"
+  },
   "devDependencies": {
     "electron": "^29.0.0"
   }
