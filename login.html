@@ -1,0 +1,164 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <meta http-equiv="Content-Security-Policy" content="script-src 'self' 'unsafe-inline' https://cdn.tailwindcss.com;">
+    <title>POS System Login</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background-color: #1f2937;
+        }
+        
+        .auth-card {
+            background-color: white;
+            border-radius: 0.5rem;
+            box-shadow: 0 10px 15px -3px rgba(0, 0, 0, 0.1), 0 4px 6px -2px rgba(0, 0, 0, 0.05);
+        }
+        
+        .auth-input {
+            width: 100%;
+            border: 1px solid #e5e7eb;
+            border-radius: 0.375rem;
+            padding: 0.5rem 0.75rem;
+            margin-bottom: 1rem;
+        }
+        
+        .auth-input:focus {
+            outline: none;
+            border-color: #3b82f6;
+            box-shadow: 0 0 0 3px rgba(59, 130, 246, 0.1);
+        }
+        
+        .auth-button {
+            width: 100%;
+            background-color: #3b82f6;
+            color: white;
+            font-weight: bold;
+            padding: 0.5rem 1rem;
+            border-radius: 0.375rem;
+            cursor: pointer;
+            transition: background-color 0.2s;
+        }
+        
+        .auth-button:hover {
+            background-color: #2563eb;
+        }
+        
+        .auth-button:disabled {
+            background-color: #93c5fd;
+            cursor: not-allowed;
+        }
+    </style>
+</head>
+<body class="flex items-center justify-center min-h-screen">
+    <div class="auth-card w-full max-w-md p-6">
+        <div class="text-center mb-6">
+            <h1 class="text-2xl font-bold text-gray-800">UNIVERSITY POS SYSTEM</h1>
+            <p class="text-gray-600">Vendor Login</p>
+        </div>
+        
+        <!-- Login Form -->
+        <div id="login-form" class="auth-form">
+            <div class="mb-4">
+                <label for="login-email" class="block text-gray-700 mb-1">Email</label>
+                <input type="email" id="login-email" class="auth-input" placeholder="Enter your email">
+            </div>
+            <div class="mb-6">
+                <label for="login-password" class="block text-gray-700 mb-1">Password</label>
+                <input type="password" id="login-password" class="auth-input" placeholder="Enter your password">
+            </div>
+            <button id="login-button" class="auth-button">Login</button>
+        </div>
+        
+        <div id="auth-message" class="mt-4 text-center text-sm font-medium hidden"></div>
+        <div id="loading-indicator" class="mt-4 text-center hidden">
+            <div class="inline-block h-8 w-8 animate-spin rounded-full border-4 border-solid border-blue-600 border-r-transparent"></div>
+        </div>
+    </div>
+    
+    <script>
+        // Login functionality
+        const loginButton = document.getElementById('login-button');
+        const loginEmail = document.getElementById('login-email');
+        const loginPassword = document.getElementById('login-password');
+        const authMessage = document.getElementById('auth-message');
+        const loadingIndicator = document.getElementById('loading-indicator');
+        
+        loginButton.addEventListener('click', async () => {
+            const email = loginEmail.value.trim();
+            const password = loginPassword.value;
+            
+            if (!email || !password) {
+                showMessage('Please enter both email and password', 'error');
+                return;
+            }
+            
+            try {
+                showLoading(true);
+                
+                const result = await window.api.auth.login({
+                    email,
+                    password
+                });
+                
+                // Login successful
+                window.location.href = 'index.html';
+            } catch (error) {
+                showLoading(false);
+                showMessage(error.message || 'Login failed', 'error');
+            }
+        });
+        
+        // Handle Enter key press
+        loginPassword.addEventListener('keypress', async (event) => {
+            if (event.key === 'Enter') {
+                loginButton.click();
+            }
+        });
+        
+        // Helper functions
+        function showMessage(message, type = 'info') {
+            authMessage.textContent = message;
+            authMessage.classList.remove('hidden', 'text-red-600', 'text-green-600', 'text-blue-600');
+            
+            if (type === 'error') {
+                authMessage.classList.add('text-red-600');
+            } else if (type === 'success') {
+                authMessage.classList.add('text-green-600');
+            } else {
+                authMessage.classList.add('text-blue-600');
+            }
+        }
+        
+        function showLoading(show) {
+            if (show) {
+                loadingIndicator.classList.remove('hidden');
+                loginButton.disabled = true;
+            } else {
+                loadingIndicator.classList.add('hidden');
+                loginButton.disabled = false;
+            }
+        }
+        
+        // Check if we already have a session
+        window.addEventListener('DOMContentLoaded', async () => {
+            try {
+                showLoading(true);
+                const { session } = await window.api.auth.getSession();
+                
+                if (session) {
+                    // Already logged in, redirect to main app
+                    window.location.href = 'index.html';
+                }
+            } catch (error) {
+                console.error('Session check error:', error);
+            } finally {
+                showLoading(false);
+            }
+        });
+    </script>
+</body>
+</html>
