@@ -1,0 +1,14 @@
+{
+  "name": "canteen-pos-electron",
+  "version": "1.0.0",
+  "description": "University Canteen POS wrapped in Electron",
+  "main": "main.js",
+  "scripts": {
+    "start": "electron ."
+  },
+  "author": "",
+  "license": "MIT",
+  "devDependencies": {
+    "electron": "^29.0.0"
+  }
+}
