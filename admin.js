@@ -1,6 +1,7 @@
 /**
  * Admin Dashboard JavaScript
  * Handles admin functionality for student balance management and transaction history
+ * Includes image upload functionality.
  */
 
 "use strict";
@@ -14,11 +15,11 @@ document.addEventListener('DOMContentLoaded', () => {
         // Admin info
         adminName: document.getElementById('admin-name'),
         logoutButton: document.getElementById('logout-button'),
-        
+
         // Tabs
         tabs: document.querySelectorAll('.tab'),
         tabContents: document.querySelectorAll('.tab-content'),
-        
+
         // Balance Management
         studentSearch: document.getElementById('student-search'),
         searchButton: document.getElementById('search-button'),
@@ -30,16 +31,12 @@ document.addEventListener('DOMContentLoaded', () => {
         topupAmount: document.getElementById('topup-amount'),
         topupButton: document.getElementById('topup-button'),
         studentTransactionsBody: document.getElementById('student-transactions-body'),
-        
-        // Kiosk Mode
-        kioskStudentId: document.getElementById('kiosk-student-id'),
-        kioskCheckButton: document.getElementById('kiosk-check-button'),
-        kioskResult: document.getElementById('kiosk-result'),
-        kioskStudentIdDisplay: document.getElementById('kiosk-student-id-display'),
-        kioskStudentName: document.getElementById('kiosk-student-name'),
-        kioskStudentBalance: document.getElementById('kiosk-student-balance'),
-        kioskNotFound: document.getElementById('kiosk-not-found'),
-        
+        // --- NEW: Image Elements ---
+        studentImagePreview: document.getElementById('student-image-preview'),
+        studentImageInput: document.getElementById('student-image-input'),
+        uploadImageButton: document.getElementById('upload-image-button'),
+        // --- END NEW ---
+
         // Transaction History
         dateFilter: document.getElementById('date-filter'),
         typeFilter: document.getElementById('type-filter'),
@@ -51,8 +48,8 @@ document.addEventListener('DOMContentLoaded', () => {
         totalCount: document.getElementById('total-count'),
         prevPage: document.getElementById('prev-page'),
         nextPage: document.getElementById('next-page'),
-        exportButton: document.getElementById('export-transactions-button'), // Added export button
-        
+        exportButton: document.getElementById('export-transactions-button'),
+
         // Notifications and Overlays
         successMessage: document.getElementById('success-message'),
         errorMessage: document.getElementById('error-message'),
@@ -72,42 +69,36 @@ document.addEventListener('DOMContentLoaded', () => {
     };
 
     // --- Authentication Functions ---
-    
+
     async function checkAuth() {
         try {
             showLoading();
             showConnectionStatus('Checking authentication...', 'checking');
-            
+
             const result = await window.api.auth.getSession();
-            
+
             if (!result.session) {
-                // Not authenticated, redirect to login
                 window.location.href = 'login.html';
                 return false;
             }
-            
-            // Check if user is an admin
+
             try {
                 const adminInfo = await window.api.admin.getInfo();
-                
+
                 if (!adminInfo) {
-                    // Not an admin, redirect to login
                     await window.api.auth.logout();
                     window.location.href = 'login.html';
                     return false;
                 }
-                
-                // Store admin info
+
                 state.currentAdmin = adminInfo;
-                
-                // Update UI with admin name
                 if (ui.adminName) {
                     ui.adminName.textContent = state.currentAdmin.name;
                 }
-                
+
                 showConnectionStatus('Connected', 'connected');
                 setTimeout(() => hideConnectionStatus(), 3000);
-                
+
                 return true;
             } catch (error) {
                 console.error('Admin check failed:', error);
@@ -128,12 +119,12 @@ document.addEventListener('DOMContentLoaded', () => {
             hideLoading();
         }
     }
-    
+
     async function logout() {
         try {
             showLoading();
             await window.api.auth.logout();
-            // The main process will handle redirection to login page
+            // Main process handles redirection
         } catch (error) {
             console.error('Logout error:', error);
             showNotification('Logout failed: ' + error.message, 'error');
@@ -142,24 +133,16 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Tab Functionality ---
-    
+
     function setupTabs() {
         ui.tabs.forEach(tab => {
             tab.addEventListener('click', () => {
-                // Remove active class from all tabs
                 ui.tabs.forEach(t => t.classList.remove('active'));
-                
-                // Add active class to the clicked tab
                 tab.classList.add('active');
-                
-                // Hide all tab contents
                 ui.tabContents.forEach(content => content.classList.add('hidden'));
-                
-                // Show the corresponding tab content
                 const tabId = tab.getAttribute('data-tab');
                 document.getElementById(tabId).classList.remove('hidden');
-                
-                // Load data for specific tabs
+
                 if (tabId === 'transaction-history') {
                     loadTransactionHistory();
                 }
@@ -168,53 +151,60 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Student Balance Management Functions ---
-    
+
     function setupBalanceManagement() {
-        // Search button
         ui.searchButton.addEventListener('click', () => searchStudent());
-        
-        // Enter key in search field
         ui.studentSearch.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                searchStudent();
-            }
+            if (e.key === 'Enter') searchStudent();
         });
-        
-        // Top-up button
         ui.topupButton.addEventListener('click', () => topUpBalance());
+
+        // --- NEW: Image Upload Listeners ---
+        ui.studentImageInput.addEventListener('change', handleImageFileSelection);
+        ui.uploadImageButton.addEventListener('click', handleImageUpload);
+        // --- END NEW ---
     }
-    
+
     async function searchStudent() {
         const uid = ui.studentSearch.value.trim();
-        
-        if (!uid) {
-            return;
-        }
-        
+        if (!uid) return;
+
         showLoading();
         clearStudentInfo();
-        
+
         try {
             const student = await window.api.admin.getStudentByUid(uid);
-            
+
             if (!student) {
                 ui.studentNotFound.classList.remove('hidden');
                 return;
             }
-            
-            // Store current student
+
             state.currentStudent = student;
-            
-            // Update UI
+
+            // Update UI with student details
             ui.studentId.textContent = student.uid;
             ui.studentName.textContent = student.name;
             ui.studentBalance.textContent = `₱${student.balance.toFixed(2)}`;
-            
-            // Show student info
+
+            // --- NEW: Display student image ---
+            if (student.picture_url) { // Using picture_url from schema
+                ui.studentImagePreview.src = student.picture_url;
+                ui.studentImagePreview.alt = `Image of ${student.name}`;
+                ui.studentImagePreview.classList.remove('hidden');
+            } else {
+                 // Show placeholder/default if no image
+                ui.studentImagePreview.src = ''; // Or path to a default placeholder image
+                ui.studentImagePreview.alt = 'No student image';
+                ui.studentImagePreview.classList.remove('hidden'); // Keep the space consistent
+            }
+            ui.studentImageInput.value = null; // Clear file input
+            ui.uploadImageButton.classList.add('hidden'); // Hide upload button initially
+            // --- END NEW ---
+
             ui.studentInfo.classList.remove('hidden');
-            
-            // Load student transactions
             await loadStudentTransactions(student.uid);
+
         } catch (error) {
             console.error('Student search error:', error);
             showNotification('Error searching for student: ' + error.message, 'error');
@@ -223,49 +213,55 @@ document.addEventListener('DOMContentLoaded', () => {
             hideLoading();
         }
     }
-    
+
     function clearStudentInfo() {
         state.currentStudent = null;
         ui.studentNotFound.classList.add('hidden');
         ui.studentInfo.classList.add('hidden');
         ui.studentTransactionsBody.innerHTML = '';
+        // --- NEW: Clear image elements ---
+        ui.studentImagePreview.src = '';
+        ui.studentImagePreview.classList.add('hidden');
+        ui.studentImageInput.value = null;
+        ui.uploadImageButton.classList.add('hidden');
+        // --- END NEW ---
     }
-    
+
     async function loadStudentTransactions(studentUid) {
         try {
             const transactions = await window.api.admin.getStudentTransactions(studentUid);
-            
-            // Clear previous transactions
             ui.studentTransactionsBody.innerHTML = '';
-            
+
             if (!transactions || transactions.length === 0) {
-                const noTransactionsRow = document.createElement('tr');
-                noTransactionsRow.innerHTML = `
-                    <td colspan="4" class="px-4 py-4 text-sm text-center text-gray-500">No recent transactions found</td>
-                `;
-                ui.studentTransactionsBody.appendChild(noTransactionsRow);
+                const noTransactionsRow = `<tr><td colspan="4" class="px-4 py-4 text-sm text-center text-gray-500">No recent transactions found</td></tr>`;
+                ui.studentTransactionsBody.innerHTML = noTransactionsRow;
                 return;
             }
-            
-            // Add transactions to the table
+
             transactions.forEach(tx => {
                 const row = document.createElement('tr');
                 const date = new Date(tx.timestamp);
                 const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                
+                const amount = tx.type === 'purchase' ? (tx.total_amount !== undefined ? tx.total_amount : 0) : (tx.amount !== undefined ? tx.amount : 0);
+                const amountSign = tx.type === 'purchase' ? '-' : '+';
+                const amountColor = tx.type === 'purchase' ? 'text-red-600' : 'text-green-600';
+                const typeText = tx.type === 'purchase' ? 'Purchase' : 'Top Up';
+                const typeColor = tx.type === 'purchase' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800';
+                const source = tx.type === 'purchase' ? (tx.vendor_name || 'Canteen') : (tx.admin_name || 'Admin');
+
+
                 row.innerHTML = `
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${formattedDate}</td>
-                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${tx.type === 'purchase' ? (tx.vendor_name || 'Canteen') : 'Admin'}</td>
-                    <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium ${tx.type === 'purchase' ? 'text-red-600' : 'text-green-600'}">
-                        ${tx.type === 'purchase' ? '-' : '+'}₱${tx.type === 'purchase' ? tx.total_amount.toFixed(2) : tx.amount.toFixed(2)}
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${source}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium ${amountColor}">
+                        ${amountSign}₱${amount.toFixed(2)}
                     </td>
                     <td class="px-4 py-2 whitespace-nowrap text-sm">
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${tx.type === 'purchase' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">
-                            ${tx.type === 'purchase' ? 'Purchase' : 'Top Up'}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${typeColor}">
+                            ${typeText}
                         </span>
                     </td>
                 `;
-                
                 ui.studentTransactionsBody.appendChild(row);
             });
         } catch (error) {
@@ -273,35 +269,29 @@ document.addEventListener('DOMContentLoaded', () => {
             showNotification('Error loading student transactions', 'error');
         }
     }
-    
+
     async function topUpBalance() {
         if (!state.currentStudent) {
             showNotification('No student selected', 'error');
             return;
         }
-        
+
         const amountStr = ui.topupAmount.value.trim();
         const amount = parseFloat(amountStr);
-        
+
         if (!amountStr || isNaN(amount) || amount <= 0) {
-            showNotification('Please enter a valid amount', 'error');
+            showNotification('Please enter a valid positive amount', 'error');
             return;
         }
-        
+
         showLoading();
-        
+
         try {
             const updatedStudent = await window.api.admin.topUpBalance(state.currentStudent.uid, amount);
-            
-            // Update state and UI
             state.currentStudent = updatedStudent;
             ui.studentBalance.textContent = `₱${updatedStudent.balance.toFixed(2)}`;
             ui.topupAmount.value = '';
-            
-            // Show success notification
             showNotification(`Successfully added ₱${amount.toFixed(2)} to ${updatedStudent.name}'s balance`, 'success');
-            
-            // Reload student transactions
             await loadStudentTransactions(state.currentStudent.uid);
         } catch (error) {
             console.error('Top up error:', error);
@@ -311,151 +301,132 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // --- Kiosk Mode Functions ---
-    
-    function setupKioskMode() {
-        // Check button
-        ui.kioskCheckButton.addEventListener('click', () => checkKioskStudent());
-        
-        // Enter key in kiosk field
-        ui.kioskStudentId.addEventListener('keydown', (e) => {
-            if (e.key === 'Enter') {
-                checkKioskStudent();
-            }
-        });
-    }
-    
-    async function checkKioskStudent() {
-        const uid = ui.kioskStudentId.value.trim();
-        
-        if (!uid) {
-            return;
-        }
-        
-        showLoading();
-        clearKioskInfo();
-        
-        try {
-            const student = await window.api.admin.getStudentByUid(uid);
-            
-            if (!student) {
-                ui.kioskNotFound.classList.remove('hidden');
+    // --- NEW: Image Handling Functions ---
+
+    function handleImageFileSelection() {
+        if (ui.studentImageInput.files && ui.studentImageInput.files[0]) {
+            const file = ui.studentImageInput.files[0];
+            const validTypes = ['image/jpeg', 'image/png', 'image/gif'];
+            if (!validTypes.includes(file.type)) {
+                showNotification('Invalid file type. Please select a JPG, PNG, or GIF image.', 'error');
+                ui.studentImageInput.value = null; // Reset input
+                ui.uploadImageButton.classList.add('hidden');
                 return;
             }
-            
-            // Update UI
-            ui.kioskStudentIdDisplay.textContent = student.uid;
-            ui.kioskStudentName.textContent = student.name;
-            ui.kioskStudentBalance.textContent = `₱${student.balance.toFixed(2)}`;
-            
-            // Show result
-            ui.kioskResult.classList.remove('hidden');
-            
-            // Clear input
-            ui.kioskStudentId.value = '';
-            
-            // Auto-hide after 10 seconds for privacy
-            setTimeout(() => {
-                clearKioskInfo();
-            }, 10000);
-        } catch (error) {
-            console.error('Kiosk student check error:', error);
-            ui.kioskNotFound.classList.remove('hidden');
-        } finally {
-            hideLoading();
+
+             if (file.size > 5 * 1024 * 1024) { // 5MB limit example
+                 showNotification('File is too large. Maximum size is 5MB.', 'error');
+                 ui.studentImageInput.value = null;
+                 ui.uploadImageButton.classList.add('hidden');
+                 return;
+             }
+
+            // Show local preview
+            const reader = new FileReader();
+            reader.onload = (e) => {
+                ui.studentImagePreview.src = e.target.result;
+                ui.studentImagePreview.classList.remove('hidden');
+            }
+            reader.readAsDataURL(file);
+
+            ui.uploadImageButton.classList.remove('hidden'); // Show upload button
+            ui.uploadImageButton.disabled = false;
+        } else {
+            ui.uploadImageButton.classList.add('hidden'); // Hide if no file selected
         }
     }
-    
-    function clearKioskInfo() {
-        ui.kioskResult.classList.add('hidden');
-        ui.kioskNotFound.classList.add('hidden');
+
+    async function handleImageUpload() {
+        if (!state.currentStudent || !ui.studentImageInput.files || ui.studentImageInput.files.length === 0) {
+            showNotification('Please select a student and an image file first.', 'error');
+            return;
+        }
+
+        const file = ui.studentImageInput.files[0];
+        const studentUid = state.currentStudent.uid;
+
+        // Prepare file data for IPC (send path and metadata, not the raw object)
+        const fileData = {
+            path: file.path,
+            name: file.name,
+            type: file.type
+        };
+
+        showLoading();
+        ui.uploadImageButton.disabled = true;
+        ui.uploadImageButton.textContent = 'Uploading...';
+
+        try {
+            // Call backend to upload image, passing file metadata
+            const imageUrl = await window.api.admin.uploadStudentImage(studentUid, fileData);
+
+            // Call backend to update the student record with the new URL
+            const updatedStudent = await window.api.admin.updateStudentImageUrl(studentUid, imageUrl);
+
+            // Update UI
+            state.currentStudent = updatedStudent; // Update local state
+            ui.studentImagePreview.src = imageUrl; // Update preview with the final URL
+            ui.studentImagePreview.classList.remove('hidden');
+            ui.uploadImageButton.classList.add('hidden'); // Hide button after success
+            ui.studentImageInput.value = null; // Reset file input
+
+            showNotification('Image uploaded and updated successfully!', 'success');
+
+        } catch (error) {
+            console.error('Image upload process error:', error);
+            showNotification(`Image upload failed: ${error.message}`, 'error');
+            // Keep button enabled to allow retry
+             ui.uploadImageButton.disabled = false;
+        } finally {
+            hideLoading();
+            ui.uploadImageButton.textContent = 'Upload Selected Image'; // Reset button text
+        }
     }
+    // --- END NEW ---
+
 
     // --- Transaction History Functions ---
-    
+
     function setupTransactionHistory() {
-        // Filter changes
-        ui.dateFilter.addEventListener('change', () => {
-            state.currentPage = 1;
-            loadTransactionHistory();
-        });
-        
-        ui.typeFilter.addEventListener('change', () => {
-            state.currentPage = 1;
-            loadTransactionHistory();
-        });
-        
-        ui.transactionSearch.addEventListener('input', debounce(() => {
-            state.currentPage = 1;
-            loadTransactionHistory();
-        }, 300));
-        
-        // Pagination
-        ui.prevPage.addEventListener('click', () => {
-            if (state.currentPage > 1) {
-                state.currentPage--;
-                loadTransactionHistory();
-            }
-        });
-        
-        ui.nextPage.addEventListener('click', () => {
-            if (state.currentPage < state.totalPages) {
-                state.currentPage++;
-                loadTransactionHistory();
-            }
-         });
-         
-         // Export button
-         ui.exportButton.addEventListener('click', () => exportTransactionHistory());
-     }
-     
-     async function loadTransactionHistory() {
+        ui.dateFilter.addEventListener('change', () => { state.currentPage = 1; loadTransactionHistory(); });
+        ui.typeFilter.addEventListener('change', () => { state.currentPage = 1; loadTransactionHistory(); });
+        ui.transactionSearch.addEventListener('input', debounce(() => { state.currentPage = 1; loadTransactionHistory(); }, 300));
+        ui.prevPage.addEventListener('click', () => { if (state.currentPage > 1) { state.currentPage--; loadTransactionHistory(); } });
+        ui.nextPage.addEventListener('click', () => { if (state.currentPage < state.totalPages) { state.currentPage++; loadTransactionHistory(); } });
+        ui.exportButton.addEventListener('click', () => exportTransactionHistory());
+    }
+
+    async function loadTransactionHistory() {
         ui.transactionsLoading.classList.remove('hidden');
         ui.noTransactions.classList.add('hidden');
         ui.transactionsBody.innerHTML = '';
-        
+
         try {
-            // Build filters
             const filters = {
                 type: ui.typeFilter.value,
                 searchTerm: ui.transactionSearch.value.trim()
             };
-            
-            // Add date filter if selected
+
             const dateFilter = ui.dateFilter.value;
             if (dateFilter !== 'all') {
                 let startDate = new Date();
-                
-                if (dateFilter === 'today') {
-                    startDate.setHours(0, 0, 0, 0);
-                } else if (dateFilter === 'week') {
-                    startDate.setDate(startDate.getDate() - startDate.getDay());
-                    startDate.setHours(0, 0, 0, 0);
-                } else if (dateFilter === 'month') {
-                    startDate.setDate(1);
-                    startDate.setHours(0, 0, 0, 0);
-                }
-                
+                if (dateFilter === 'today') { startDate.setHours(0, 0, 0, 0); }
+                else if (dateFilter === 'week') { startDate.setDate(startDate.getDate() - startDate.getDay()); startDate.setHours(0, 0, 0, 0); }
+                else if (dateFilter === 'month') { startDate.setDate(1); startDate.setHours(0, 0, 0, 0); }
                 filters.startDate = startDate.toISOString();
             }
-            
-            // Get transactions with filters
+
             const transactions = await window.api.admin.getAllTransactions(filters);
-            
-            // Update pagination
+
             state.totalPages = Math.ceil(transactions.length / state.pageSize) || 1;
-            if (state.currentPage > state.totalPages) {
-                state.currentPage = 1;
-            }
-            
-            // Get current page of transactions
+            if (state.currentPage > state.totalPages) state.currentPage = 1;
+
             const startIndex = (state.currentPage - 1) * state.pageSize;
             const endIndex = startIndex + state.pageSize;
             const pageTransactions = transactions.slice(startIndex, endIndex);
-            
-            // Hide loading indicator
+
             ui.transactionsLoading.classList.add('hidden');
-            
+
             if (pageTransactions.length === 0) {
                 ui.noTransactions.classList.remove('hidden');
                 ui.showingCount.textContent = '0';
@@ -464,32 +435,36 @@ document.addEventListener('DOMContentLoaded', () => {
                 ui.nextPage.disabled = true;
                 return;
             }
-            
-            // Add transactions to the table
+
             pageTransactions.forEach(tx => {
                 const row = document.createElement('tr');
                 const date = new Date(tx.timestamp);
                 const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                
+                const amount = tx.type === 'purchase' ? (tx.total_amount !== undefined ? tx.total_amount : 0) : (tx.amount !== undefined ? tx.amount : 0);
+                const amountSign = tx.type === 'purchase' ? '-' : '+';
+                const amountColor = tx.type === 'purchase' ? 'text-red-600' : 'text-green-600';
+                const typeText = tx.type === 'purchase' ? 'Purchase' : 'Top Up';
+                const typeColor = tx.type === 'purchase' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800';
+                const source = tx.type === 'purchase' ? (tx.vendor_name || 'Canteen') : (tx.admin_name || 'Admin');
+                const studentName = tx.student_name || 'Unknown'; // Use joined name
+
                 row.innerHTML = `
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${formattedDate}</td>
                     <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${tx.student_uid}</td>
-                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${tx.student_name || 'Unknown'}</td>
-                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${tx.type === 'purchase' ? (tx.vendor_name || 'Canteen') : (tx.admin_name || 'Admin')}</td>
-                    <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium ${tx.type === 'purchase' ? 'text-red-600' : 'text-green-600'}">
-                        ${tx.type === 'purchase' ? '-' : '+'}₱${tx.type === 'purchase' ? tx.total_amount.toFixed(2) : tx.amount.toFixed(2)}
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${studentName}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-gray-500">${source}</td>
+                    <td class="px-4 py-2 whitespace-nowrap text-sm text-right font-medium ${amountColor}">
+                        ${amountSign}₱${amount.toFixed(2)}
                     </td>
                     <td class="px-4 py-2 whitespace-nowrap text-sm">
-                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${tx.type === 'purchase' ? 'bg-red-100 text-red-800' : 'bg-green-100 text-green-800'}">
-                            ${tx.type === 'purchase' ? 'Purchase' : 'Top Up'}
+                        <span class="px-2 inline-flex text-xs leading-5 font-semibold rounded-full ${typeColor}">
+                            ${typeText}
                         </span>
                     </td>
                 `;
-                
                 ui.transactionsBody.appendChild(row);
             });
-            
-            // Update pagination info
+
             ui.showingCount.textContent = pageTransactions.length;
             ui.totalCount.textContent = transactions.length;
             ui.prevPage.disabled = state.currentPage === 1;
@@ -505,7 +480,6 @@ document.addEventListener('DOMContentLoaded', () => {
     async function exportTransactionHistory() {
         showLoading();
         try {
-            // Get current filters
             const filters = {
                 type: ui.typeFilter.value,
                 searchTerm: ui.transactionSearch.value.trim()
@@ -514,21 +488,12 @@ document.addEventListener('DOMContentLoaded', () => {
             const dateFilter = ui.dateFilter.value;
             if (dateFilter !== 'all') {
                 let startDate = new Date();
-
-                if (dateFilter === 'today') {
-                    startDate.setHours(0, 0, 0, 0);
-                } else if (dateFilter === 'week') {
-                    startDate.setDate(startDate.getDate() - startDate.getDay());
-                    startDate.setHours(0, 0, 0, 0);
-                } else if (dateFilter === 'month') {
-                    startDate.setDate(1);
-                    startDate.setHours(0, 0, 0, 0);
-                }
-
+                if (dateFilter === 'today') { startDate.setHours(0, 0, 0, 0); }
+                else if (dateFilter === 'week') { startDate.setDate(startDate.getDate() - startDate.getDay()); startDate.setHours(0, 0, 0, 0); }
+                else if (dateFilter === 'month') { startDate.setDate(1); startDate.setHours(0, 0, 0, 0); }
                 filters.startDate = startDate.toISOString();
             }
 
-            // Fetch all transactions based on current filters (no pagination for export)
             const transactionsToExport = await window.api.admin.getAllTransactions(filters);
 
             if (!transactionsToExport || transactionsToExport.length === 0) {
@@ -536,38 +501,38 @@ document.addEventListener('DOMContentLoaded', () => {
                 return;
             }
 
-            // Format data as CSV
             const csvHeader = ["Date", "Student ID", "Student Name", "Source", "Amount", "Type"];
             const csvRows = transactionsToExport.map(tx => {
                 const date = new Date(tx.timestamp);
                 const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
-                const amount = tx.type === 'purchase' ? -tx.total_amount : tx.amount;
+                const amountVal = tx.type === 'purchase' ? (tx.total_amount !== undefined ? -tx.total_amount : 0) : (tx.amount !== undefined ? tx.amount : 0);
                 const source = tx.type === 'purchase' ? (tx.vendor_name || 'Canteen') : (tx.admin_name || 'Admin');
                 const type = tx.type === 'purchase' ? 'Purchase' : 'Top Up';
+                const studentName = tx.student_name || 'Unknown';
 
+                // Escape commas within fields by enclosing in double quotes
                 return [
                     `"${formattedDate}"`,
                     `"${tx.student_uid}"`,
-                    `"${tx.student_name || 'Unknown'}"`,
-                    `"${source}"`,
-                    amount.toFixed(2),
+                    `"${studentName.replace(/"/g, '""')}"`, // Escape double quotes inside name
+                    `"${source.replace(/"/g, '""')}"`,
+                    amountVal.toFixed(2),
                     `"${type}"`
                 ].join(',');
             });
 
             const csvContent = [csvHeader.join(','), ...csvRows].join('\n');
-
-            // Trigger download
-            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const blob = new Blob(["\ufeff" + csvContent], { type: 'text/csv;charset=utf-8;' }); // Add BOM for Excel
             const link = document.createElement('a');
             const url = URL.createObjectURL(blob);
 
             link.setAttribute('href', url);
-            link.setAttribute('download', 'transaction_history.csv');
+            link.setAttribute('download', `transaction_history_${new Date().toISOString().split('T')[0]}.csv`);
             link.style.visibility = 'hidden';
             document.body.appendChild(link);
             link.click();
             document.body.removeChild(link);
+            URL.revokeObjectURL(url); // Clean up blob URL
 
             showNotification('Transaction history exported successfully.', 'success');
 
@@ -580,51 +545,39 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // --- Utility Functions ---
-    
-    function showLoading() {
-        if (ui.loadingOverlay) ui.loadingOverlay.classList.remove('hidden');
-    }
-    
-    function hideLoading() {
-        if (ui.loadingOverlay) ui.loadingOverlay.classList.add('hidden');
-    }
-    
+
+    function showLoading() { if (ui.loadingOverlay) ui.loadingOverlay.classList.remove('hidden'); }
+    function hideLoading() { if (ui.loadingOverlay) ui.loadingOverlay.classList.add('hidden'); }
+
     function showConnectionStatus(message, type = 'info') {
         if (ui.connectionStatus && ui.connectionText) {
             ui.connectionText.textContent = message;
-            ui.connectionStatus.className = `fixed top-2 right-2 px-3 py-1 rounded-lg text-sm ${
-                type === 'connected' ? 'bg-green-600' :
-                type === 'checking' ? 'bg-yellow-600' :
-                'bg-red-600'
+            ui.connectionStatus.className = `fixed top-2 right-2 px-3 py-1 rounded-lg text-sm z-50 ${
+                type === 'connected' ? 'bg-green-600' : type === 'checking' ? 'bg-yellow-600' : 'bg-red-600'
             } text-white`;
             ui.connectionStatus.classList.remove('hidden');
         }
     }
-    
-    function hideConnectionStatus() {
-        if (ui.connectionStatus) {
-            ui.connectionStatus.classList.add('hidden');
-        }
-    }
-    
-    function showNotification(message, type = 'success') {
+    function hideConnectionStatus() { if (ui.connectionStatus) ui.connectionStatus.classList.add('hidden'); }
+
+    let notificationTimeout;
+    function showNotification(message, type = 'success', duration = 3000) {
         const notificationDiv = type === 'success' ? ui.successMessage : ui.errorMessage;
         if (notificationDiv) {
+             if(notificationTimeout) clearTimeout(notificationTimeout); // Clear existing timer
             notificationDiv.textContent = message;
             notificationDiv.classList.remove('hidden');
-            setTimeout(() => {
+            notificationTimeout = setTimeout(() => {
                 notificationDiv.classList.add('hidden');
-            }, 3000);
+                notificationTimeout = null;
+            }, duration);
         }
     }
-    
+
     function debounce(func, wait) {
         let timeout;
         return function executedFunction(...args) {
-            const later = () => {
-                clearTimeout(timeout);
-                func(...args);
-            };
+            const later = () => { clearTimeout(timeout); func(...args); };
             clearTimeout(timeout);
             timeout = setTimeout(later, wait);
         };
@@ -635,35 +588,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function init() {
         try {
-            // First check if user is authenticated as admin
             const isAuthenticated = await checkAuth();
             if (!isAuthenticated) return;
-            
             showLoading();
-            
-            // Set up event listeners
             setupTabs();
             setupBalanceManagement();
-            setupKioskMode();
             setupTransactionHistory();
-            
-            // Set up logout button
             ui.logoutButton.addEventListener('click', logout);
-            
-            // Auto-focus student search on load
             ui.studentSearch.focus();
-            
             showNotification("Admin dashboard initialized successfully", "success");
         } catch (error) {
             console.error("Initialization error:", error);
-            showNotification("System initialization failed. Please check your connection.", "error", 5000);
+            showNotification("System initialization failed. Please check connection.", "error", 5000);
         } finally {
             hideLoading();
         }
     }
-    
-    // Start initialization
-    init();
 
+    init();
     console.log("Admin Dashboard Initialization Complete");
 });

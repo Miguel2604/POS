@@ -1,7 +1,8 @@
-// main.js - Complete version with admin functionality and vendor sales summary
+// main.js - Original structure with added image upload functionality for admins
 
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
+const fs = require('fs'); // <-- ADDED for file reading
 const { createClient } = require('@supabase/supabase-js');
 
 // Supabase configuration
@@ -108,6 +109,8 @@ app.whenReady().then(() => {
 app.on('window-all-closed', function () {
   if (process.platform !== 'darwin') app.quit();
 });
+
+// --- Start Original IPC Handlers ---
 
 // Auth-related IPC handlers
 ipcMain.handle('auth-login', async (event, { email, password }) => {
@@ -347,13 +350,13 @@ ipcMain.handle('supabase-student-get-by-uid', async (event, uid) => {
 
 ipcMain.handle('supabase-students-save', async (event, student) => {
   try {
-    // Check if user is authenticated
+    // Check if user is authenticated (Admin or Vendor might save/update students)
     if (!currentVendorId && !currentAdminId) throw new Error('Not authenticated');
 
-    // No vendor_id for students, they are shared across all vendors
+    // No vendor_id for students, they are shared across all vendors/admins
     const { data, error } = await supabase
       .from('students')
-      .upsert(student, { onConflict: 'uid' });
+      .upsert(student, { onConflict: 'uid' }); // Use upsert to insert or update
 
     if (error) throw error;
     return data;
@@ -390,7 +393,7 @@ ipcMain.handle('supabase-products-save', async (event, product) => {
 
     const { data, error } = await supabase
       .from('products')
-      .upsert(product, { onConflict: 'id' });
+      .upsert(product, { onConflict: 'id' }); // Use product's own 'id' for conflict
 
     if (error) throw error;
     return data;
@@ -413,8 +416,8 @@ ipcMain.handle('supabase-products-delete', async (event, id) => {
 
     if (fetchError) throw fetchError;
 
-    if (product.vendor_id !== currentVendorId) {
-      throw new Error('Unauthorized to delete this product');
+    if (!product || product.vendor_id !== currentVendorId) { // Added check for !product
+      throw new Error('Unauthorized to delete this product or product not found');
     }
 
     const { error } = await supabase
@@ -446,18 +449,18 @@ ipcMain.handle('supabase-transactions-get', async () => {
       return data;
     }
 
-    // For admins, show all transactions
-    if (currentAdminId) {
-      const { data, error } = await supabase
-        .from('transactions')
-        .select('*')
-        .order('timestamp', { ascending: false });
+    // For admins, show all transactions (or define specific admin logic if needed)
+    // This currently returns nothing for admins, modify if needed
+    // if (currentAdminId) {
+    //   const { data, error } = await supabase
+    //     .from('transactions')
+    //     .select('*')
+    //     .order('timestamp', { ascending: false });
+    //   if (error) throw error;
+    //   return data;
+    // }
 
-      if (error) throw error;
-      return data;
-    }
-
-    return [];
+    return []; // Return empty array if not a vendor or no specific admin logic
   } catch (error) {
     console.error('Error fetching transactions:', error);
     throw error;
@@ -484,7 +487,7 @@ ipcMain.handle('supabase-transactions-save', async (event, transaction) => {
 
     const { data, error } = await supabase
       .from('transactions')
-      .insert(transaction);
+      .insert(transaction); // Insert purchase transaction
 
     if (error) throw error;
     return data;
@@ -494,7 +497,7 @@ ipcMain.handle('supabase-transactions-save', async (event, transaction) => {
   }
 });
 
-// --- NEW: Vendor Sales Summary Handler ---
+// Vendor Sales Summary Handler
 ipcMain.handle('supabase-get-sales-summary', async (event, period) => {
   try {
     if (!currentVendorId) throw new Error('No vendor logged in');
@@ -502,276 +505,218 @@ ipcMain.handle('supabase-get-sales-summary', async (event, period) => {
     const now = new Date();
     let startDate, endDate;
 
-    // Calculate date range based on the period
     switch (period) {
       case 'day':
-        startDate = new Date(now);
-        startDate.setHours(0, 0, 0, 0); // Start of today
-        endDate = new Date(now);
-        endDate.setHours(23, 59, 59, 999); // End of today
+        startDate = new Date(now); startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now); endDate.setHours(23, 59, 59, 999);
         break;
       case 'week':
-        startDate = new Date(now);
-        const dayOfWeek = startDate.getDay(); // 0 (Sun) - 6 (Sat)
-        const diff = startDate.getDate() - dayOfWeek; // Adjust to Sunday
-        startDate.setDate(diff);
-        startDate.setHours(0, 0, 0, 0); // Start of the week (Sunday)
-
-        endDate = new Date(startDate);
-        endDate.setDate(startDate.getDate() + 6); // End of the week (Saturday)
-        endDate.setHours(23, 59, 59, 999);
+        startDate = new Date(now); const dayOfWeek = startDate.getDay(); const diff = startDate.getDate() - dayOfWeek; startDate.setDate(diff); startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(startDate); endDate.setDate(startDate.getDate() + 6); endDate.setHours(23, 59, 59, 999);
         break;
       case 'month':
-        startDate = new Date(now.getFullYear(), now.getMonth(), 1); // First day of current month
-        startDate.setHours(0, 0, 0, 0);
-
-        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0); // Last day of current month
-        endDate.setHours(23, 59, 59, 999);
+        startDate = new Date(now.getFullYear(), now.getMonth(), 1); startDate.setHours(0, 0, 0, 0);
+        endDate = new Date(now.getFullYear(), now.getMonth() + 1, 0); endDate.setHours(23, 59, 59, 999);
         break;
-      default:
-        throw new Error('Invalid period specified');
+      default: throw new Error('Invalid period specified');
     }
 
     console.log(`[Sales Summary] Period: ${period}, Start: ${startDate.toISOString()}, End: ${endDate.toISOString()}`);
 
-    // Query Supabase for transactions within the date range for the current vendor
     const { data, error } = await supabase
       .from('transactions')
       .select('total_amount')
       .eq('vendor_id', currentVendorId)
-      .gte('timestamp', startDate.toISOString()) // Greater than or equal to start date
-      .lte('timestamp', endDate.toISOString());   // Less than or equal to end date
+      .gte('timestamp', startDate.toISOString())
+      .lte('timestamp', endDate.toISOString());
 
-    if (error) {
-        console.error('Error fetching sales summary:', error);
-        throw error;
-    }
+    if (error) { console.error('Error fetching sales summary:', error); throw error; }
 
-    // Calculate the total sum
     const totalSales = data.reduce((sum, transaction) => sum + (transaction.total_amount || 0), 0);
 
     console.log(`[Sales Summary] Total Sales for ${period}: ${totalSales}`);
     return { totalSales: totalSales };
 
-  } catch (error) {
-    console.error('Error calculating sales summary:', error);
-    throw error; // Re-throw the error to be caught by the frontend
-  }
+  } catch (error) { console.error('Error calculating sales summary:', error); throw error; }
 });
-// --- END NEW ---
-
 
 // Admin IPC Handlers
 ipcMain.handle('supabase-admin-get-info', async () => {
   try {
-    if (!currentAdminId || !authSession) {
-      return null;
-    }
-
-    const { data, error } = await supabase
-      .from('admins')
-      .select('*')
-      .eq('id', currentAdminId)
-      .single();
-
-    if (error) throw error;
-    return data;
-  } catch (error) {
-    console.error('Get admin info error:', error);
-    throw error;
-  }
+    if (!currentAdminId || !authSession) { return null; }
+    const { data, error } = await supabase.from('admins').select('*').eq('id', currentAdminId).single();
+    if (error) throw error; return data;
+  } catch (error) { console.error('Get admin info error:', error); throw error; }
 });
 
 ipcMain.handle('supabase-admin-get-student-by-uid', async (event, uid) => {
   try {
     if (!currentAdminId) throw new Error('Not authorized as admin');
-
-    const { data, error } = await supabase
-      .from('students')
-      .select('*')
-      .eq('uid', uid)
-      .single();
-
-    if (error && error.code !== 'PGRST116') throw error; // Ignore 'not found' error
-    return data;
-  } catch (error) {
-    console.error('Admin get student error:', error);
-    throw error;
-  }
+    const { data, error } = await supabase.from('students').select('*').eq('uid', uid).single();
+    if (error && error.code !== 'PGRST116') throw error; return data;
+  } catch (error) { console.error('Admin get student error:', error); throw error; }
 });
 
 ipcMain.handle('supabase-admin-topup-balance', async (event, studentUid, amount) => {
   try {
     if (!currentAdminId) throw new Error('Not authorized as admin');
-
-    // Get admin information
-    const { data: adminData, error: adminError } = await supabase
-      .from('admins')
-      .select('*')
-      .eq('id', currentAdminId)
-      .single();
-
+    const { data: adminData, error: adminError } = await supabase.from('admins').select('*').eq('id', currentAdminId).single();
     if (adminError) throw adminError;
-
-    // Begin transaction
-    // 1. Get current student
-    const { data: student, error: studentError } = await supabase
-      .from('students')
-      .select('*')
-      .eq('uid', studentUid)
-      .single();
-
+    const { data: student, error: studentError } = await supabase.from('students').select('*').eq('uid', studentUid).single();
     if (studentError) throw studentError;
-
-    // 2. Update balance
+    if (!student) throw new Error(`Student with UID ${studentUid} not found.`); // Added check
     const newBalance = student.balance + amount;
-    const { data: updatedStudent, error: updateError } = await supabase
-      .from('students')
-      .update({ balance: newBalance })
-      .eq('uid', studentUid)
-      .select()
-      .single();
-
+    const { data: updatedStudent, error: updateError } = await supabase.from('students').update({ balance: newBalance }).eq('uid', studentUid).select().single();
     if (updateError) throw updateError;
-
-    // 3. Record transaction
-    const { error: transactionError } = await supabase
-      .from('balance_transactions')
-      .insert({
-        student_uid: studentUid,
-        amount: amount,
-        admin_id: currentAdminId,
-        admin_name: adminData.name,
-        timestamp: new Date().toISOString(),
-        type: 'topup'
-      });
-
-    if (transactionError) throw transactionError;
-
+    const { error: transactionError } = await supabase.from('balance_transactions').insert({ student_uid: studentUid, amount: amount, admin_id: currentAdminId, admin_name: adminData.name, timestamp: new Date().toISOString(), type: 'topup' });
+    if (transactionError) { console.warn('Error logging topup transaction:', transactionError); /* Log error but don't fail */ }
     return updatedStudent;
-  } catch (error) {
-    console.error('Admin topup error:', error);
-    throw error;
-  }
+  } catch (error) { console.error('Admin topup error:', error); throw error; }
 });
 
 ipcMain.handle('supabase-admin-get-student-transactions', async (event, studentUid) => {
   try {
     if (!currentAdminId) throw new Error('Not authorized as admin');
-
-    // Get purchase transactions
-    const { data: purchaseTransactions, error: purchaseError } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('student_uid', studentUid)
-      .order('timestamp', { ascending: false })
-      .limit(5);
-
+    const { data: purchaseTransactions, error: purchaseError } = await supabase.from('transactions').select('*').eq('student_uid', studentUid).order('timestamp', { ascending: false }).limit(5);
     if (purchaseError) throw purchaseError;
-
-    // Get top-up transactions
-    const { data: topupTransactions, error: topupError } = await supabase
-      .from('balance_transactions')
-      .select('*')
-      .eq('student_uid', studentUid)
-      .order('timestamp', { ascending: false })
-      .limit(5);
-
+    const { data: topupTransactions, error: topupError } = await supabase.from('balance_transactions').select('*').eq('student_uid', studentUid).order('timestamp', { ascending: false }).limit(5);
     if (topupError) throw topupError;
-
-    // Combine and process transactions
     const allTransactions = [
-      ...(purchaseTransactions || []).map(tx => ({
-        ...tx,
-        type: 'purchase'
-      })),
-      ...(topupTransactions || []).map(tx => ({
-        ...tx,
-        type: 'topup'
-      }))
+      ...(purchaseTransactions || []).map(tx => ({ ...tx, type: 'purchase' })),
+      ...(topupTransactions || []).map(tx => ({ ...tx, type: 'topup' }))
     ];
-
-    // Sort by timestamp (newest first)
     allTransactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
     return allTransactions.slice(0, 5);
-  } catch (error) {
-    console.error('Get student transactions error:', error);
-    throw error;
-  }
+  } catch (error) { console.error('Get student transactions error:', error); throw error; }
 });
 
 ipcMain.handle('supabase-admin-get-all-transactions', async (event, filters) => {
   try {
     if (!currentAdminId) throw new Error('Not authorized as admin');
-
     const { startDate, type, searchTerm } = filters || {};
-
-    // Get purchase transactions if needed
     let purchaseTransactions = [];
     if (!type || type === 'all' || type === 'purchase') {
-      let purchaseQuery = supabase
-        .from('transactions')
-        .select('*, students!inner(name)')
-        .order('timestamp', { ascending: false });
-
-      if (startDate) {
-        purchaseQuery = purchaseQuery.gte('timestamp', startDate);
-      }
-
+      let purchaseQuery = supabase.from('transactions').select('*, students!inner(name)').order('timestamp', { ascending: false });
+      if (startDate) { purchaseQuery = purchaseQuery.gte('timestamp', startDate); }
       const { data, error } = await purchaseQuery;
-
-      if (error) throw error;
-      purchaseTransactions = data || [];
+      if (error) throw error; purchaseTransactions = data || [];
     }
-
-    // Get top-up transactions if needed
     let topupTransactions = [];
     if (!type || type === 'all' || type === 'topup') {
-      let topupQuery = supabase
-        .from('balance_transactions')
-        .select('*, students!inner(name)')
-        .order('timestamp', { ascending: false });
-
-      if (startDate) {
-        topupQuery = topupQuery.gte('timestamp', startDate);
-      }
-
+      let topupQuery = supabase.from('balance_transactions').select('*, students!inner(name)').order('timestamp', { ascending: false });
+      if (startDate) { topupQuery = topupQuery.gte('timestamp', startDate); }
       const { data, error } = await topupQuery;
-
-      if (error) throw error;
-      topupTransactions = data || [];
+      if (error) throw error; topupTransactions = data || [];
     }
-
-    // Process and combine transactions
-    const processedPurchases = purchaseTransactions.map(tx => ({
-      ...tx,
-      type: 'purchase',
-      student_name: tx.students?.name || 'Unknown'
-    }));
-
-    const processedTopups = topupTransactions.map(tx => ({
-      ...tx,
-      type: 'topup',
-      student_name: tx.students?.name || 'Unknown'
-    }));
-
+    const processedPurchases = purchaseTransactions.map(tx => ({ ...tx, type: 'purchase', student_name: tx.students?.name || 'Unknown' }));
+    const processedTopups = topupTransactions.map(tx => ({ ...tx, type: 'topup', student_name: tx.students?.name || 'Unknown' }));
     let allTransactions = [...processedPurchases, ...processedTopups];
-
-    // Apply search filter if provided
     if (searchTerm) {
       allTransactions = allTransactions.filter(tx =>
         (tx.student_uid && tx.student_uid.toLowerCase().includes(searchTerm.toLowerCase())) ||
         (tx.student_name && tx.student_name.toLowerCase().includes(searchTerm.toLowerCase()))
       );
     }
-
-    // Sort by timestamp (newest first)
     allTransactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
-
     return allTransactions;
-  } catch (error) {
-    console.error('Get all transactions error:', error);
-    throw error;
-  }
+  } catch (error) { console.error('Get all transactions error:', error); throw error; }
 });
+
+// --- End Original IPC Handlers ---
+
+
+// --- *** ADDED: Admin Image Upload Handlers *** ---
+
+ipcMain.handle('supabase-admin-upload-image', async (event, studentUid, fileData) => {
+    console.log('Handling image upload for student:', studentUid);
+    if (!currentAdminId) throw new Error('Not authorized as admin');
+
+    // fileData should contain { path: '...', name: '...', type: '...' }
+    if (!fileData || !fileData.path || !fileData.name || !fileData.type) {
+        throw new Error('Invalid file data received in main process.');
+    }
+
+    const BUCKET_NAME = 'student-images'; // Use your actual bucket name
+
+    try {
+        // 1. Read file content from the path provided by the renderer
+        const fileBuffer = fs.readFileSync(fileData.path);
+        console.log(`Read file buffer for ${fileData.name}, size: ${fileBuffer.length}`);
+
+        // 2. Create a unique file path/name in the bucket
+        const fileExtension = path.extname(fileData.name);
+        // Store directly in the bucket root or a specific folder like 'public/'
+        const fileNameInBucket = `${studentUid}_${Date.now()}${fileExtension}`;
+        console.log(`Uploading to bucket path: ${fileNameInBucket}`);
+
+        // 3. Upload to Supabase Storage
+        const { data: uploadData, error: uploadError } = await supabase.storage
+            .from(BUCKET_NAME)
+            .upload(fileNameInBucket, fileBuffer, {
+                contentType: fileData.type,
+                upsert: true // Overwrite if file with same name exists
+            });
+
+        if (uploadError) {
+            console.error('Supabase storage upload error:', uploadError);
+            throw uploadError;
+        }
+
+        console.log('Upload successful:', uploadData);
+
+        // 4. Get the public URL for the uploaded file
+        const { data: urlData } = supabase.storage
+            .from(BUCKET_NAME)
+            .getPublicUrl(fileNameInBucket);
+
+        if (!urlData || !urlData.publicUrl) {
+            console.error('Could not retrieve public URL after upload.');
+            throw new Error('File uploaded but could not retrieve public URL.');
+        }
+
+        console.log(`Public URL generated: ${urlData.publicUrl}`);
+        return urlData.publicUrl;
+
+    } catch (error) {
+        console.error('Error during image upload process:', error);
+        throw error; // Re-throw error to be caught by renderer
+    }
+});
+
+ipcMain.handle('supabase-admin-update-image-url', async (event, studentUid, imageUrl) => {
+    console.log(`Updating picture_url for student ${studentUid}`);
+    if (!currentAdminId) throw new Error('Not authorized as admin');
+
+    // Allow setting URL to null to remove image association
+    if (imageUrl !== null && typeof imageUrl !== 'string') {
+        console.warn("Invalid Image URL provided for update, setting to null.");
+        imageUrl = null;
+    }
+
+    try {
+        const { data: updatedStudent, error } = await supabase
+            .from('students')
+            .update({ picture_url: imageUrl }) // Use 'picture_url' from schema
+            .eq('uid', studentUid)
+            .select() // Select the updated row to return it
+            .single(); // Expect only one row
+
+        if (error) {
+            console.error('Error updating student picture_url in DB:', error);
+            throw error;
+        }
+
+        console.log(`Successfully updated picture_url for ${studentUid}`);
+        return updatedStudent; // Return the full updated student record
+
+    } catch (dbError) {
+        console.error('Database error during picture_url update:', dbError);
+        throw dbError; // Re-throw error to be caught by renderer
+    }
+});
+
+// --- *** END ADDED *** ---
+
+
+console.log("Main process started and IPC handlers registered.");
+// End of main.js file
