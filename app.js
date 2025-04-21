@@ -2,13 +2,17 @@
  * Canteen POS Application Logic
  * Updated to support vendor authentication
  * Fixed button functionality
+ * Added Sales Summary Feature
+ * Re-added Transaction ID to History View
+ * Fixed Product Add Error (Missing ID)
+ * Fixed Transaction Save Error (Missing transaction_id)
  */
 
-"use strict"; 
+"use strict";
 
 // Wait for the DOM to be fully loaded before running scripts
 document.addEventListener('DOMContentLoaded', () => {
-    console.log("DOM fully loaded and parsed. Initializing POS script with Supabase and vendor auth.");
+    console.log("DOM fully loaded and parsed. Initializing POS script with Supabase, vendor auth, and sales summary.");
 
     // --- DOM Element Selectors ---
     const ui = {
@@ -18,10 +22,10 @@ document.addEventListener('DOMContentLoaded', () => {
         cancelPaymentButton: document.getElementById('cancel-payment-button'),
         confirmPaymentButton: document.getElementById('confirm-payment-button'),
         logoutButton: document.getElementById('logout-button'),
-        
+
         // Header Buttons
-        viewTransactionsButton: document.getElementById('view-transactions-button'), // Added View Transactions button
-        manageMenuButton: document.getElementById('manage-menu-button'), // Renamed Menu button
+        viewTransactionsButton: document.getElementById('view-transactions-button'),
+        manageMenuButton: document.getElementById('manage-menu-button'),
 
         // Modal Elements
         paymentModal: document.getElementById('payment-modal'),
@@ -43,37 +47,46 @@ document.addEventListener('DOMContentLoaded', () => {
         // Message Popups
         successMessageDiv: document.getElementById('success-message'),
         errorMessageDiv: document.getElementById('error-message'),
-        
+
         // Receipt Modal Elements
         receiptModal: document.getElementById('receipt-modal'),
         receiptContentDiv: document.getElementById('receipt-content'),
         exportReceiptButton: document.getElementById('export-receipt-button'),
         closeReceiptButton: document.getElementById('close-receipt-button'),
-        
-        // Admin Panel Elements
-        
+
         // Transaction History Modal Elements
         transactionHistoryModal: document.getElementById('transaction-history-modal'),
         closeTransactionHistoryButton: document.getElementById('close-transaction-history-button'),
-        posTransactionList: document.getElementById('pos-transaction-list'), // Renamed transaction list div
+        posTransactionList: document.getElementById('pos-transaction-list'),
 
         // Product Management Modal Elements
         productManagementModal: document.getElementById('product-management-modal'),
         closeProductManagementButton: document.getElementById('close-product-management-button'),
         adminProductList: document.getElementById('admin-product-list'),
         adminAddProductForm: document.getElementById('admin-add-product-form'),
-        
+
         // PIN Modal Elements
         pinModal: document.getElementById('pin-modal'),
         pinInput: document.getElementById('pin-input'),
         pinFeedback: document.getElementById('pin-feedback'),
         pinCancelButton: document.getElementById('pin-cancel-button'),
         pinConfirmButton: document.getElementById('pin-confirm-button'),
-        
+
         // Vendor Information
         vendorNameDisplay: document.getElementById('vendor-name'),
         connectionStatus: document.getElementById('connection-status'),
-        connectionText: document.getElementById('connection-text')
+        connectionText: document.getElementById('connection-text'),
+
+        // --- NEW: Sales Summary Elements ---
+        salesSummaryDisplay: document.getElementById('sales-summary-display'),
+        salesSummaryDayBtn: document.getElementById('sales-summary-day-btn'),
+        salesSummaryWeekBtn: document.getElementById('sales-summary-week-btn'),
+        salesSummaryMonthBtn: document.getElementById('sales-summary-month-btn'),
+        salesSummaryBtns: document.querySelectorAll('.sales-summary-btn'), // NodeList of all summary buttons
+        // --- END NEW ---
+
+        // Loading Overlay
+        loadingOverlay: document.getElementById('loading-overlay') // Added selector for loading overlay
     };
 
     // --- Application State & Data ---
@@ -84,35 +97,38 @@ document.addEventListener('DOMContentLoaded', () => {
         transactions: [],
         currentStudent: null,
         paymentInProgress: false,
-        currentVendor: null
+        currentVendor: null,
+        // --- NEW: Sales Summary State ---
+        currentSalesPeriod: 'day' // Default to 'day'
+        // --- END NEW ---
     };
 
     // --- User Authentication Functions ---
-    
+
     async function checkAuth() {
         try {
             showLoading();
             showConnectionStatus('Checking authentication...', 'checking');
-            
+
             const result = await window.api.auth.getSession();
-            
-            if (!result.session) {
-                // Not authenticated, redirect to login
+
+            if (!result.session || result.role !== 'vendor') { // Ensure it's a vendor session
+                // Not authenticated or not a vendor, redirect to login
                 window.location.href = 'login.html';
                 return false;
             }
-            
+
             // Store vendor info
             state.currentVendor = result.vendor;
-            
+
             // Update UI with vendor name
             if (ui.vendorNameDisplay) {
                 ui.vendorNameDisplay.textContent = state.currentVendor.name;
             }
-            
+
             showConnectionStatus('Connected', 'connected');
             setTimeout(() => hideConnectionStatus(), 3000);
-            
+
             return true;
         } catch (error) {
             console.error('Auth check failed:', error);
@@ -125,7 +141,7 @@ document.addEventListener('DOMContentLoaded', () => {
             hideLoading();
         }
     }
-    
+
     async function logout() {
         try {
             showLoading();
@@ -173,14 +189,23 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function saveProduct(product) {
         try {
+            // Ensure product has an ID before saving (relevant for updates)
+            // The main.js handler expects an ID for upsert logic.
+            if (!product.id && product.id !== 0) { // Check if ID is missing or null/undefined
+                 console.warn('Attempting to save product without an ID:', product);
+                 // Decide how to handle: throw error, generate ID here, or rely on main.js (which currently doesn't generate it)
+                 // For now, let's rely on the calling function (renderProductManagement) to provide the ID.
+                 // throw new Error("Product ID is required to save.");
+            }
             await window.api.products.save(product);
-            console.log('Product saved successfully:', product.id);
+            console.log('Product save request sent for:', product.id || 'new product');
         } catch (error) {
             console.error('Error saving product:', error);
             showNotification('Error saving product', 'error');
-            throw error;
+            throw error; // Re-throw to be caught by the calling function if needed
         }
     }
+
 
     async function deleteProduct(id) {
         try {
@@ -195,6 +220,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function getAllTransactions() {
         try {
+            // This should return all columns including the primary key 'id'
             return await window.api.transactions.getAll();
         } catch (error) {
             console.error('Error getting transactions:', error);
@@ -205,14 +231,52 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function saveTransaction(transaction) {
         try {
+            // Ensure transaction has a transaction_id before saving
+            if (!transaction.transaction_id) {
+                 console.error('Attempting to save transaction without a transaction_id:', transaction);
+                 // Throw an error or handle as needed, but it shouldn't reach here if processPayment generates it.
+                 throw new Error("Transaction ID is required to save.");
+            }
+            // The main.js handler adds vendor_id and vendor_name
             await window.api.transactions.save(transaction);
-            console.log('Transaction saved successfully:', transaction.transactionId);
+            console.log('Transaction save request sent for ID:', transaction.transaction_id);
         } catch (error) {
             console.error('Error saving transaction:', error);
             showNotification('Error saving transaction', 'error');
-            throw error;
+            throw error; // Re-throw to be caught by processPayment
         }
     }
+
+
+    // --- NEW: Sales Summary Function ---
+    async function fetchAndDisplaySalesSummary(period) {
+        console.log(`Fetching sales summary for period: ${period}`);
+        if (!ui.salesSummaryDisplay) return; // Exit if display element not found
+
+        ui.salesSummaryDisplay.textContent = 'Loading...'; // Show loading state
+        // Update active button style
+        ui.salesSummaryBtns.forEach(btn => {
+            if (btn.dataset.period === period) {
+                btn.classList.add('active');
+            } else {
+                btn.classList.remove('active');
+            }
+        });
+
+        try {
+            const result = await window.api.transactions.getSalesSummary(period);
+            const totalSales = result.totalSales || 0;
+            ui.salesSummaryDisplay.textContent = `₱${totalSales.toFixed(2)}`;
+            state.currentSalesPeriod = period; // Update state
+            console.log(`Sales summary updated for ${period}: ₱${totalSales.toFixed(2)}`);
+        } catch (error) {
+            console.error(`Error fetching sales summary for ${period}:`, error);
+            ui.salesSummaryDisplay.textContent = 'Error';
+            showNotification(`Failed to load ${period} sales: ${error.message}`, 'error');
+        }
+    }
+    // --- END NEW ---
+
 
     // --- Core Functions ---
 
@@ -287,7 +351,8 @@ document.addEventListener('DOMContentLoaded', () => {
             const students = await getAllStudents();
             state.students = {};
             students.forEach(s => {
-                state.students[s.uid] = { name: s.name, balance: s.balance };
+                // Ensure balance is stored as a number
+                state.students[s.uid] = { name: s.name, balance: parseFloat(s.balance) || 0 };
             });
             console.log("Student data loaded successfully");
         } catch (error) {
@@ -356,9 +421,7 @@ document.addEventListener('DOMContentLoaded', () => {
         updateCartDisplay();
     }
 
-    // Updated to fetch student from Supabase if not found locally
     async function handleRfidScan(uid) {
-        // const uid = rawUid.trim(); // Removed trim based on user feedback
         console.log(`Handling RFID scan for raw UID: "${uid}"`);
         ui.paymentFeedbackDiv.textContent = '';
         ui.paymentFeedbackDiv.classList.remove('text-red-600');
@@ -373,12 +436,13 @@ document.addEventListener('DOMContentLoaded', () => {
             console.warn('Student not found locally, attempting Supabase lookup for UID:', uid);
             try {
                 showLoading(); // Show loading indicator during DB lookup
-                student = await window.api.students.getByUid(uid);
-                console.log('Supabase lookup result:', student);
-                
-                if (student) {
-                    // Add fetched student to local cache
-                    state.students[uid] = { name: student.name, balance: student.balance };
+                const studentDataFromDB = await window.api.students.getByUid(uid);
+                console.log('Supabase lookup result:', studentDataFromDB);
+
+                if (studentDataFromDB) {
+                    // Add fetched student to local cache, ensuring balance is a number
+                    student = { name: studentDataFromDB.name, balance: parseFloat(studentDataFromDB.balance) || 0 };
+                    state.students[uid] = student;
                     console.log('Student found in Supabase and added to local cache.');
                 }
             } catch (error) {
@@ -401,8 +465,7 @@ document.addEventListener('DOMContentLoaded', () => {
         }
 
         // Ensure student object has the necessary properties (might be from cache or DB)
-        const studentData = state.students[uid] || student; 
-        state.currentStudent = { uid, ...studentData };
+        state.currentStudent = { uid, ...student };
         console.log('Set currentStudent:', state.currentStudent);
 
         ui.studentNameSpan.textContent = student.name;
@@ -429,31 +492,33 @@ document.addEventListener('DOMContentLoaded', () => {
     async function processPayment() {
         console.log("Processing payment...");
         showLoading();
+        state.paymentInProgress = true; // Set flag at the beginning
 
         try {
             // Always perform a fresh scan using current RFID input value
-            const uid = ui.rfidInput.value; // Removed trim based on user feedback
-
-            let student = state.students[uid];
-            console.log("Local student lookup during payment:", student);
+            const uid = ui.rfidInput.value;
 
             if (!uid) {
                 ui.paymentFeedbackDiv.textContent = "Please enter or scan an ID.";
                 ui.paymentFeedbackDiv.classList.add('text-red-600');
                 state.paymentInProgress = false;
-                hideLoading(); // Ensure loading is hidden
+                hideLoading();
                 return;
             }
+
+            let student = state.students[uid]; // Check local cache first
+            console.log("Local student lookup during payment:", student);
 
             // If not found locally, try fetching from Supabase directly
             if (!student) {
                 console.warn('Student not found locally during payment, attempting Supabase lookup for UID:', uid);
                 try {
-                    student = await window.api.students.getByUid(uid);
-                    console.log('Supabase lookup result during payment:', student);
-                    if (student) {
-                        // Add fetched student to local cache
-                        state.students[uid] = { name: student.name, balance: student.balance };
+                    const studentDataFromDB = await window.api.students.getByUid(uid);
+                    console.log('Supabase lookup result during payment:', studentDataFromDB);
+                    if (studentDataFromDB) {
+                        // Add fetched student to local cache, ensuring balance is a number
+                        student = { name: studentDataFromDB.name, balance: parseFloat(studentDataFromDB.balance) || 0 };
+                        state.students[uid] = student;
                         console.log('Student found in Supabase and added to local cache during payment.');
                     }
                 } catch (error) {
@@ -472,21 +537,12 @@ document.addEventListener('DOMContentLoaded', () => {
                 ui.paymentFeedbackDiv.textContent = "Invalid or missing student ID.";
                 ui.paymentFeedbackDiv.classList.add('text-red-600');
                 state.paymentInProgress = false;
+                hideLoading();
                 return;
             }
 
-            if (!student) {
-                console.error("Invalid or missing student ID.");
-                ui.paymentFeedbackDiv.textContent = "Invalid or missing student ID.";
-                ui.paymentFeedbackDiv.classList.add('text-red-600');
-                state.paymentInProgress = false;
-                hideLoading(); // Ensure loading is hidden
-                return;
-            }
-
-            // Use the potentially updated student data (from cache or DB)
-            const studentData = state.students[uid] || student;
-            state.currentStudent = { uid, ...studentData };
+            // Use the potentially updated student data
+            state.currentStudent = { uid, ...student };
 
             const total = state.cart.reduce((sum, item) => sum + item.price * item.quantity, 0);
             console.log("Cart total:", total);
@@ -496,40 +552,47 @@ document.addEventListener('DOMContentLoaded', () => {
                 ui.paymentFeedbackDiv.textContent = "Cart is empty. Please add items.";
                 ui.paymentFeedbackDiv.classList.add('text-red-600');
                 state.paymentInProgress = false;
-                hideLoading(); // Ensure loading is hidden
+                hideLoading();
                 return;
             }
 
-            if (studentData.balance < total) {
+            if (student.balance < total) {
                 console.warn("Insufficient balance during payment.");
                 ui.paymentFeedbackDiv.textContent = "Insufficient balance.";
                 ui.paymentFeedbackDiv.classList.add('text-red-600');
                 state.paymentInProgress = false;
-                hideLoading(); // Ensure loading is hidden
+                hideLoading();
                 return;
             }
 
-            // Deduct balance from the correct student data object
-            studentData.balance -= total;
-            state.currentStudent.balance = studentData.balance; // Update state.currentStudent as well
+            // Deduct balance
+            const newBalance = student.balance - total;
+            student.balance = newBalance; // Update local cache
+            state.currentStudent.balance = newBalance; // Update state.currentStudent as well
 
-            // Persist updated student
-            await saveStudent({ uid, name: studentData.name, balance: studentData.balance });
+            // Persist updated student balance
+            await saveStudent({ uid, name: student.name, balance: newBalance });
             console.log("Student balance updated in Supabase");
 
             // Record transaction
+            // --- FIX: Generate transaction_id ---
+            // Generate a simple transaction ID if the DB doesn't auto-generate it.
+            // NOTE: This is not guaranteed to be unique. UUIDs or DB sequences are better.
+            const transaction_id = 'tx_' + Date.now() + '_' + Math.random().toString(36).substring(2, 7);
             const transaction = {
-                transaction_id: Date.now().toString(),
+                transaction_id: transaction_id, // Add the generated ID
                 timestamp: new Date().toISOString(),
-                student_uid: uid, // Changed from studentUid to student_uid
+                student_uid: uid,
                 items: JSON.stringify(state.cart), // Stringify the cart items
-                total_amount: parseFloat(total.toFixed(2)) // Changed from totalAmount to total_amount
+                total_amount: parseFloat(total.toFixed(2)),
+                // vendor_id and vendor_name will be added by main.js handler
             };
-            state.transactions.push(transaction);
+            // --- END FIX ---
 
             // Persist transaction
-            await saveTransaction(transaction);
-            console.log("Transaction saved in Supabase");
+            await saveTransaction(transaction); // Call the save function
+            console.log("Transaction save request completed for ID:", transaction.transaction_id);
+
 
             // Show success message
             showNotification("Payment successful!", "success", 3000);
@@ -539,18 +602,24 @@ document.addEventListener('DOMContentLoaded', () => {
             updateCartDisplay();
 
             // Display receipt
+            // Pass details to receipt, including the generated ID
             openReceiptModal(transaction);
 
-            console.log("Payment processed successfully:", transaction);
-            state.paymentInProgress = false; // Reset flag earlier
+            // --- NEW: Refresh sales summary after successful payment ---
+            await fetchAndDisplaySalesSummary(state.currentSalesPeriod);
+            // --- END NEW ---
+
+            console.log("Payment processed successfully.");
+
         } catch (error) {
             console.error("Payment error:", error);
-            showNotification("Payment failed: " + error.message, "error");
-            state.paymentInProgress = false; // Ensure flag is reset on error
+            showNotification("Payment failed: " + (error.message || "Unknown error"), "error"); // Show error message
         } finally {
+            state.paymentInProgress = false; // Reset flag in finally block
             hideLoading(); // Ensure loading is hidden in all cases
         }
     }
+
 
     async function clearCart() {
         state.cart = [];
@@ -560,13 +629,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // --- Utility Functions ---
 
     function showLoading() {
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) overlay.classList.remove('hidden');
+        if (ui.loadingOverlay) ui.loadingOverlay.classList.remove('hidden');
     }
 
     function hideLoading() {
-        const overlay = document.getElementById('loading-overlay');
-        if (overlay) overlay.classList.add('hidden');
+        if (ui.loadingOverlay) ui.loadingOverlay.classList.add('hidden');
     }
 
     function showConnectionStatus(message, type = 'info') {
@@ -574,10 +641,10 @@ document.addEventListener('DOMContentLoaded', () => {
         const statusText = ui.connectionText;
         if (statusDiv && statusText) {
             statusText.textContent = message;
-            statusDiv.className = `fixed top-2 left-2 px-3 py-1 rounded-lg text-sm ${
-                type === 'connected' ? 'bg-green-600' :
-                type === 'checking' ? 'bg-yellow-600' :
-                'bg-red-600'
+            statusDiv.className = `fixed top-2 left-2 px-3 py-1 rounded-lg text-sm z-40 ${ // Ensure z-index
+                type === 'connected' ? 'bg-green-600 text-white' :
+                type === 'checking' ? 'bg-yellow-500 text-black' :
+                'bg-red-600 text-white'
             }`;
             statusDiv.classList.remove('hidden');
         }
@@ -607,7 +674,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     function openReceiptModal(receiptDetails) {
         if (ui.receiptModal && ui.receiptContentDiv) {
-            // Format and display receipt details (placeholder for now)
+            // Format and display receipt details
             ui.receiptContentDiv.innerHTML = formatReceiptContent(receiptDetails);
             ui.receiptModal.classList.remove('hidden');
         }
@@ -623,24 +690,30 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Function for receipt formatting
     function formatReceiptContent(details) {
-        let content = `<strong>Transaction ID:</strong> ${details.transaction_id}<br>`;
+        // Use the generated transaction_id passed in 'details'
+        let content = `<strong>Transaction ID:</strong> ${details.transaction_id || 'N/A'}<br>`;
         content += `<strong>Date:</strong> ${new Date(details.timestamp).toLocaleString()}<br>`;
         content += `<strong>Student ID:</strong> ${details.student_uid}<br>`;
         content += `<strong>Total Amount:</strong> ₱${details.total_amount.toFixed(2)}<br>`;
         content += `<strong>Items:</strong><br>`;
-        
+
         try {
-            const items = JSON.parse(details.items);
-            items.forEach(item => {
-                content += `- ${item.name} x${item.quantity} (₱${(item.price * item.quantity).toFixed(2)})<br>`;
-            });
+            const items = typeof details.items === 'string' ? JSON.parse(details.items) : details.items; // Handle already parsed items
+            if (Array.isArray(items)) {
+                items.forEach(item => {
+                    content += `- ${item.name} x${item.quantity} (₱${(item.price * item.quantity).toFixed(2)})<br>`;
+                });
+            } else {
+                 content += 'Item details unavailable.';
+            }
         } catch (e) {
             content += 'Error loading item details.';
-            console.error('Error parsing receipt items:', e);
+            console.error('Error parsing receipt items:', e, details.items);
         }
-        
+
         return content;
     }
+
 
     function closePaymentModal() {
         if (ui.paymentModal) {
@@ -654,8 +727,14 @@ document.addEventListener('DOMContentLoaded', () => {
         if (notificationDiv) {
             notificationDiv.textContent = message;
             notificationDiv.classList.remove('hidden');
-            setTimeout(() => {
+            // Clear any existing timer
+            if (notificationDiv.timerId) {
+                clearTimeout(notificationDiv.timerId);
+            }
+            // Set new timer
+            notificationDiv.timerId = setTimeout(() => {
                 notificationDiv.classList.add('hidden');
+                notificationDiv.timerId = null; // Clear timer ID
             }, duration);
         }
     }
@@ -664,154 +743,216 @@ document.addEventListener('DOMContentLoaded', () => {
     async function renderTransactionHistory() {
         console.log("Rendering transaction history panel");
         if (ui.posTransactionList) {
-            ui.posTransactionList.innerHTML = '';
-            const transactions = await getAllTransactions(); // Assuming this fetches all transactions
-            
-            if (transactions.length === 0) {
-                ui.posTransactionList.innerHTML = '<p class="text-gray-500 italic">No transactions yet.</p>';
-            } else {
-                // Sort transactions by timestamp descending
-                transactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+            ui.posTransactionList.innerHTML = 'Loading transactions...'; // Show loading state
+            try {
+                const transactions = await getAllTransactions(); // Fetches transactions for the current vendor
 
-                transactions.forEach(tx => {
-                    const div = document.createElement('div');
-                    div.className = 'border p-2 rounded';
+                if (!Array.isArray(transactions)) {
+                     throw new Error("Received invalid transaction data.");
+                }
 
-                    const formattedDate = new Date(tx.timestamp).toLocaleString();
-                    
-                    div.innerHTML = `<strong>${formattedDate}</strong><br>
-                        Student UID: ${tx.student_uid}<br>
-                        Total: ₱${tx.total_amount !== undefined ? tx.total_amount.toFixed(2) : 'N/A'}<br>
-                        Items: ${typeof tx.items === 'string' ? JSON.parse(tx.items).map(i => `${i.name} x${i.quantity}`).join(', ') : 'N/A - Invalid items data'}`;
+                ui.posTransactionList.innerHTML = ''; // Clear loading message
 
-                    ui.posTransactionList.appendChild(div);
-                });
+                if (transactions.length === 0) {
+                    ui.posTransactionList.innerHTML = '<p class="text-gray-500 italic">No transactions yet.</p>';
+                } else {
+                    // Sort transactions by timestamp descending (already done by main.js, but good practice)
+                    transactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
+                    transactions.forEach(tx => {
+                        const div = document.createElement('div');
+                        div.className = 'border p-3 rounded mb-2 bg-gray-50'; // Added some styling
+
+                        const formattedDate = new Date(tx.timestamp).toLocaleString();
+                        let itemsHtml = 'N/A - Invalid items data';
+                        try {
+                            // Ensure tx.items is a string before parsing
+                            const itemsString = typeof tx.items === 'string' ? tx.items : JSON.stringify(tx.items);
+                            const items = JSON.parse(itemsString);
+                            if (Array.isArray(items)) {
+                                itemsHtml = items.map(i => `${i.name} x${i.quantity}`).join(', ');
+                            }
+                        } catch (e) {
+                            console.error("Error parsing items in transaction history:", e, tx.items);
+                        }
+
+                        // --- MODIFIED: Re-added the span displaying the Transaction DB ID ---
+                        div.innerHTML = `
+                            <div class="flex justify-between items-center mb-1">
+                                <strong class="text-sm">${formattedDate}</strong>
+                                <span class="text-xs text-gray-500">ID: ${tx.transaction_id || 'N/A'}</span>
+                            </div>
+                            <div class="text-xs text-gray-600 mb-1">Student UID: ${tx.student_uid}</div>
+                            <div class="text-xs text-gray-800 mb-1">Items: ${itemsHtml}</div>
+                            <div class="text-right font-bold text-gray-900">Total: ₱${tx.total_amount !== undefined ? tx.total_amount.toFixed(2) : 'N/A'}</div>
+                        `;
+                        // --- END MODIFICATION ---
+
+
+                        ui.posTransactionList.appendChild(div);
+                    });
+                }
+            } catch (error) {
+                 console.error("Error rendering transaction history:", error);
+                 ui.posTransactionList.innerHTML = '<p class="text-red-500 italic">Error loading transactions.</p>';
+                 showNotification("Failed to load transaction history", "error");
             }
         }
     }
+
 
     // Product Management Rendering
     async function renderProductManagement() {
         console.log("Rendering product management panel");
         if (ui.adminProductList && ui.adminAddProductForm) {
             async function renderProductList() {
-                const products = await getAllProducts();
-                ui.adminProductList.innerHTML = '';
-                
-                if (products.length === 0) {
-                    ui.adminProductList.innerHTML = '<p class="text-gray-500 italic">No products yet. Add your first product above.</p>';
-                    return;
-                }
-                
-                products.forEach(product => {
-                    const div = document.createElement('div');
-                    div.className = 'flex justify-between items-center border p-2 rounded gap-2';
+                ui.adminProductList.innerHTML = 'Loading products...'; // Loading state
+                try {
+                    const products = await getAllProducts();
+                    ui.adminProductList.innerHTML = ''; // Clear loading
 
-                    const infoDiv = document.createElement('div');
-                    infoDiv.className = 'flex-1 flex gap-2';
+                    if (products.length === 0) {
+                        ui.adminProductList.innerHTML = '<p class="text-gray-500 italic">No products yet. Add your first product above.</p>';
+                        return;
+                    }
 
-                    const nameInput = document.createElement('input');
-                    nameInput.type = 'text';
-                    nameInput.value = product.name;
-                    nameInput.className = 'flex-1 border border-gray-300 rounded p-1';
+                    products.forEach(product => {
+                        const div = document.createElement('div');
+                        div.className = 'flex justify-between items-center border p-2 rounded gap-2 mb-2 bg-gray-50'; // Added styling
 
-                    const priceInput = document.createElement('input');
-                    priceInput.type = 'number';
-                    priceInput.value = product.price.toFixed(2);
-                    priceInput.className = 'w-24 border border-gray-300 rounded p-1 text-right';
+                        const infoDiv = document.createElement('div');
+                        infoDiv.className = 'flex-1 flex flex-col sm:flex-row gap-2 items-center';
 
-                    infoDiv.appendChild(nameInput);
-                    infoDiv.appendChild(priceInput);
+                        const nameInput = document.createElement('input');
+                        nameInput.type = 'text';
+                        nameInput.value = product.name;
+                        nameInput.className = 'flex-1 border border-gray-300 rounded p-1 w-full sm:w-auto';
+                        nameInput.setAttribute('aria-label', `Product name for ${product.name}`);
 
-                    const saveBtn = document.createElement('button');
-                    saveBtn.textContent = 'Save';
-                    saveBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-sm';
-                    saveBtn.addEventListener('click', async () => {
-                        const newName = nameInput.value.trim();
-                        const newPrice = parseFloat(priceInput.value);
-                        if (!newName || isNaN(newPrice) || newPrice < 0) {
-                            alert('Invalid product data');
-                            return;
-                        }
-                        try {
-                            showLoading();
-                            await saveProduct({ id: product.id, name: newName, price: newPrice });
-                            showNotification('Product updated successfully', 'success');
-                            await renderProductList();
-                            await loadProducts(); // Reload products in main POS view
-                        } catch (error) {
-                            console.error('Update product error:', error);
-                            showNotification('Failed to update product', 'error');
-                        } finally {
-                            hideLoading();
-                        }
-                    });
 
-                    const deleteBtn = document.createElement('button');
-                    deleteBtn.textContent = 'Delete';
-                    deleteBtn.className = 'bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-sm';
-                    deleteBtn.addEventListener('click', async () => {
-                        if (confirm('Delete this product?')) {
+                        const priceInput = document.createElement('input');
+                        priceInput.type = 'number';
+                        priceInput.value = product.price.toFixed(2);
+                        priceInput.className = 'w-24 border border-gray-300 rounded p-1 text-right';
+                        priceInput.min = "0";
+                        priceInput.step = "0.01";
+                        priceInput.setAttribute('aria-label', `Price for ${product.name}`);
+
+
+                        infoDiv.appendChild(nameInput);
+                        infoDiv.appendChild(priceInput);
+
+                        const buttonDiv = document.createElement('div');
+                        buttonDiv.className = 'flex gap-2 mt-2 sm:mt-0';
+
+
+                        const saveBtn = document.createElement('button');
+                        saveBtn.textContent = 'Save';
+                        saveBtn.className = 'bg-blue-600 hover:bg-blue-700 text-white px-2 py-1 rounded text-sm';
+                        saveBtn.addEventListener('click', async () => {
+                            const newName = nameInput.value.trim();
+                            const newPrice = parseFloat(priceInput.value);
+                            if (!newName || isNaN(newPrice) || newPrice < 0) {
+                                showNotification('Invalid product data. Name cannot be empty and price must be a positive number.', 'error', 5000);
+                                return;
+                            }
                             try {
                                 showLoading();
-                                await deleteProduct(product.id);
-                                showNotification('Product deleted successfully', 'success');
-                                await renderProductList();
+                                // Pass the existing product ID for updates
+                                await saveProduct({ id: product.id, name: newName, price: newPrice });
+                                showNotification('Product updated successfully', 'success');
+                                await renderProductList(); // Re-render this modal list
                                 await loadProducts(); // Reload products in main POS view
                             } catch (error) {
-                                console.error('Delete product error:', error);
-                                showNotification('Failed to delete product', 'error');
+                                console.error('Update product error:', error);
+                                showNotification('Failed to update product', 'error');
                             } finally {
                                 hideLoading();
                             }
-                        }
+                        });
+
+                        const deleteBtn = document.createElement('button');
+                        deleteBtn.textContent = 'Delete';
+                        deleteBtn.className = 'bg-red-600 hover:bg-red-700 text-white px-2 py-1 rounded text-sm';
+                        deleteBtn.addEventListener('click', async () => {
+                            if (confirm(`Are you sure you want to delete "${product.name}"?`)) {
+                                try {
+                                    showLoading();
+                                    await deleteProduct(product.id);
+                                    showNotification('Product deleted successfully', 'success');
+                                    await renderProductList(); // Re-render this modal list
+                                    await loadProducts(); // Reload products in main POS view
+                                } catch (error) {
+                                    console.error('Delete product error:', error);
+                                    showNotification('Failed to delete product', 'error');
+                                } finally {
+                                    hideLoading();
+                                }
+                            }
+                        });
+
+                        buttonDiv.appendChild(saveBtn);
+                        buttonDiv.appendChild(deleteBtn);
+
+                        div.appendChild(infoDiv);
+                        div.appendChild(buttonDiv);
+
+                        ui.adminProductList.appendChild(div);
                     });
-
-                    div.appendChild(infoDiv);
-                    div.appendChild(saveBtn);
-                    div.appendChild(deleteBtn);
-
-                    ui.adminProductList.appendChild(div);
-                });
+                } catch (error) {
+                     console.error("Error rendering product list for management:", error);
+                     ui.adminProductList.innerHTML = '<p class="text-red-500 italic">Error loading products.</p>';
+                     showNotification("Failed to load products for management", "error");
+                }
             }
 
             await renderProductList();
 
-            ui.adminAddProductForm.onsubmit = async (e) => {
-                e.preventDefault();
-                const nameInput = document.getElementById('admin-product-name');
-                const priceInput = document.getElementById('admin-product-price');
-                const name = nameInput.value.trim();
-                const price = parseFloat(priceInput.value);
-                
-                if (!name || isNaN(price) || price < 0) {
-                    showNotification('Invalid product data', 'error');
-                    return;
-                }
-                
-                try {
-                    showLoading();
-                    const id = 'prod_' + Date.now();
-                    await saveProduct({ id, name, price });
-                    showNotification('Product added successfully', 'success');
-                    nameInput.value = '';
-                    priceInput.value = '';
-                    await renderProductList();
-                    await loadProducts(); // Reload products in main POS view
-                } catch (error) {
-                    console.error('Add product error:', error);
-                    showNotification('Failed to add product', 'error');
-                } finally {
-                    hideLoading();
-                }
-            };
+            // Ensure event listener is only added once or is idempotent
+            if (!ui.adminAddProductForm.hasAttribute('data-listener-added')) {
+                ui.adminAddProductForm.addEventListener('submit', async (e) => {
+                    e.preventDefault();
+                    const nameInput = document.getElementById('admin-product-name');
+                    const priceInput = document.getElementById('admin-product-price');
+                    const name = nameInput.value.trim();
+                    const price = parseFloat(priceInput.value);
+
+                    if (!name || isNaN(price) || price < 0) {
+                        showNotification('Invalid product data. Name cannot be empty and price must be a positive number.', 'error', 5000);
+                        return;
+                    }
+
+                    try {
+                        showLoading();
+                        // --- FIX: Generate an ID for new products ---
+                        // Generate a simple timestamp-based ID. NOTE: This is not guaranteed to be unique.
+                        // A better approach would be UUIDs or letting the database handle it if configured.
+                        const id = 'prod_' + Date.now();
+                        await saveProduct({ id, name, price }); // Send the generated ID
+                        // --- END FIX ---
+
+                        showNotification('Product added successfully', 'success');
+                        nameInput.value = '';
+                        priceInput.value = '';
+                        await renderProductList(); // Re-render this modal list
+                        await loadProducts(); // Reload products in main POS view
+                    } catch (error) {
+                        console.error('Add product error:', error);
+                        showNotification('Failed to add product', 'error');
+                    } finally {
+                        hideLoading();
+                    }
+                });
+                ui.adminAddProductForm.setAttribute('data-listener-added', 'true');
+            }
         }
     }
+
 
     // --- Event Listeners ---
     function setupEventListeners() {
         console.log("Setting up event listeners...");
-        
+
         // Pay button opens the payment modal
         if (ui.payButton) {
             ui.payButton.addEventListener('click', () => {
@@ -819,7 +960,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 openPaymentModal();
             });
         }
-        
+
         // Clear cart button clears the cart
         if (ui.clearCartButton) {
             ui.clearCartButton.addEventListener('click', () => {
@@ -827,7 +968,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 clearCart();
             });
         }
-        
+
         // Cancel payment button closes the payment modal
         if (ui.cancelPaymentButton) {
             ui.cancelPaymentButton.addEventListener('click', () => {
@@ -835,18 +976,19 @@ document.addEventListener('DOMContentLoaded', () => {
                 closePaymentModal();
             });
         }
-        
+
         // Confirm payment button processes the payment
         if (ui.confirmPaymentButton) {
             ui.confirmPaymentButton.addEventListener('click', () => {
                 console.log("Confirm payment button clicked");
-                if (!state.paymentInProgress) {
-                    state.paymentInProgress = true;
-                    processPayment();
+                if (!state.paymentInProgress && !ui.confirmPaymentButton.disabled) { // Check disabled state too
+                    processPayment(); // processPayment sets the flag internally
+                } else {
+                    console.log("Payment already in progress or button disabled.");
                 }
             });
         }
-        
+
         // RFID input handles the RFID scan
         if (ui.rfidInput) {
             // Listen for keydown to capture Enter key after scan
@@ -855,22 +997,24 @@ document.addEventListener('DOMContentLoaded', () => {
                     e.preventDefault();
                     console.log("Enter key pressed in RFID input");
                     const scannedId = ui.rfidInput.value;
-                    // Check if the input has exactly 10 digits (assuming RFID provides 10 digits)
-                    if (scannedId.length === 10) {
-                        console.log("10 digits received, attempting student lookup.");
+                    // Basic validation (e.g., length check) can happen here if needed
+                    // if (scannedId.length === 10) { // Example validation
+                        console.log("Attempting student lookup for:", scannedId);
                         handleRfidScan(scannedId);
-                    } else {
-                        console.warn(`Input length is not 10 (${scannedId.length}). Not triggering lookup.`);
-                        // Optionally provide feedback to the user if the scan was incomplete
-                        ui.paymentFeedbackDiv.textContent = 'Incomplete scan. Please try again.';
-                        ui.paymentFeedbackDiv.classList.add('text-red-600');
-                        ui.rfidInput.value = ''; // Clear input for next scan
-                    }
+                    // } else {
+                    //     console.warn(`Input length is not 10 (${scannedId.length}). Not triggering lookup.`);
+                    //     ui.paymentFeedbackDiv.textContent = 'Invalid ID length. Please scan again.';
+                    //     ui.paymentFeedbackDiv.classList.add('text-red-600');
+                    //     ui.rfidInput.value = ''; // Clear input for next scan
+                    // }
                 }
             });
-            
-            // Clear feedback and student info when input changes
+
+            // Clear feedback and student info when input changes manually
             ui.rfidInput.addEventListener('input', () => {
+                // Only clear if not triggered by the Enter key handler implicitly
+                if (document.activeElement !== ui.rfidInput) return;
+
                 ui.paymentFeedbackDiv.textContent = '';
                 ui.paymentFeedbackDiv.classList.remove('text-red-600');
                 ui.studentInfoDiv.classList.add('hidden');
@@ -878,7 +1022,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 ui.confirmPaymentButton.disabled = true;
             });
         }
-        
+
         // Logout button logs the user out
         if (ui.logoutButton) {
             ui.logoutButton.addEventListener('click', () => {
@@ -886,14 +1030,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 logout();
             });
         }
-        
+
         // View Transactions button opens the transaction history modal
         if (ui.viewTransactionsButton) {
             ui.viewTransactionsButton.addEventListener('click', async () => {
                 console.log("View Transactions button clicked");
                 if (ui.transactionHistoryModal) {
-                    await renderTransactionHistory();
                     ui.transactionHistoryModal.classList.remove('hidden');
+                    await renderTransactionHistory(); // Render content after showing modal
                 }
             });
         }
@@ -903,12 +1047,12 @@ document.addEventListener('DOMContentLoaded', () => {
             ui.manageMenuButton.addEventListener('click', async () => {
                 console.log("Manage Menu button clicked");
                 if (ui.productManagementModal) {
-                    await renderProductManagement();
                     ui.productManagementModal.classList.remove('hidden');
+                    await renderProductManagement(); // Render content after showing modal
                 }
             });
         }
-        
+
         // Close Transaction History modal button
         if (ui.closeTransactionHistoryButton) {
             ui.closeTransactionHistoryButton.addEventListener('click', () => {
@@ -928,7 +1072,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             });
         }
-        
+
         // Receipt modal buttons
         if (ui.closeReceiptButton) {
             ui.closeReceiptButton.addEventListener('click', () => {
@@ -940,95 +1084,83 @@ document.addEventListener('DOMContentLoaded', () => {
         if (ui.exportReceiptButton) {
             ui.exportReceiptButton.addEventListener('click', () => {
                 console.log("Export receipt button clicked");
-                // TODO: Implement export functionality
+                // TODO: Implement export functionality (e.g., print or save as text/PDF)
                 showNotification("Export functionality not yet implemented.", "info");
             });
         }
-        
-        // // Pin modal buttons
-        // if (ui.pinCancelButton) {
-        //     ui.pinCancelButton.addEventListener('click', () => {
-        //         console.log("PIN cancel button clicked");
-        //         if (ui.pinModal) {
-        //             ui.pinModal.classList.add('hidden');
-        //         }
-        //     });
-        // }
-        
-        // if (ui.pinConfirmButton) {
-        //     ui.pinConfirmButton.addEventListener('click', () => {
-        //         console.log("PIN confirm button clicked");
-        //         // PIN confirmation logic would go here
-        //     });
-        // }
-        
+
+        // --- NEW: Sales Summary Button Listeners ---
+        if (ui.salesSummaryDayBtn) {
+            ui.salesSummaryDayBtn.addEventListener('click', () => fetchAndDisplaySalesSummary('day'));
+        }
+        if (ui.salesSummaryWeekBtn) {
+            ui.salesSummaryWeekBtn.addEventListener('click', () => fetchAndDisplaySalesSummary('week'));
+        }
+        if (ui.salesSummaryMonthBtn) {
+            ui.salesSummaryMonthBtn.addEventListener('click', () => fetchAndDisplaySalesSummary('month'));
+        }
+        // --- END NEW ---
+
+
         console.log("Event listeners set up successfully");
 
         // Close modals with Escape key
         document.addEventListener('keydown', (e) => {
             if (e.key === 'Escape') {
                 console.log("Escape key pressed");
-                if (!ui.paymentModal.classList.contains('hidden')) {
-                    // If payment modal is open, close it
-                    closePaymentModal();
-                } else if (!ui.receiptModal.classList.contains('hidden')) {
-                    // If receipt modal is open, close it
-                    closeReceiptModal();
-                } else if (!ui.transactionHistoryModal.classList.contains('hidden')) {
-                    // If transaction history modal is open, close it
-                    if (ui.transactionHistoryModal) ui.transactionHistoryModal.classList.add('hidden');
-                } else if (!ui.productManagementModal.classList.contains('hidden')) {
-                    // If product management modal is open, close it
-                    if (ui.productManagementModal) ui.productManagementModal.classList.add('hidden');
-                } else if (!ui.pinModal.classList.contains('hidden')) {
-                    // If PIN modal is open, close it
+                // Close modals in reverse order of likely appearance
+                if (ui.pinModal && !ui.pinModal.classList.contains('hidden')) {
                     if (ui.pinModal) ui.pinModal.classList.add('hidden');
+                } else if (ui.productManagementModal && !ui.productManagementModal.classList.contains('hidden')) {
+                    if (ui.productManagementModal) ui.productManagementModal.classList.add('hidden');
+                } else if (ui.transactionHistoryModal && !ui.transactionHistoryModal.classList.contains('hidden')) {
+                    if (ui.transactionHistoryModal) ui.transactionHistoryModal.classList.add('hidden');
+                } else if (ui.receiptModal && !ui.receiptModal.classList.contains('hidden')) {
+                    closeReceiptModal(); // Closes receipt and payment modal
+                } else if (ui.paymentModal && !ui.paymentModal.classList.contains('hidden')) {
+                    closePaymentModal();
                 }
             }
         });
     }
-    
+
     // --- Initialization ---
     console.log("Initializing application data and UI...");
 
     async function initData() {
         try {
-            // First check if user is authenticated
+            // First check if user is authenticated and is a vendor
             const isAuthenticated = await checkAuth();
-            if (!isAuthenticated) return;
-            
+            if (!isAuthenticated) return; // Stop initialization if not authenticated
+
             showLoading();
-            
-            // Load students
+
+            // Load essential data in parallel? Or sequentially? Sequential is safer for dependencies.
             await loadStudentData();
-            
-            // Load transactions
-            const transactions = await getAllTransactions();
-            if (transactions.length === 0) {
-                console.log("No transactions found in Supabase.");
-            } else {
-                console.log("Loaded transactions from Supabase:", transactions);
-                state.transactions = transactions;
-            }
-            
+            // await loadInitialTransactions(); // Maybe load only recent ones initially? getAllTransactions used in modal.
+
             // Load products and render UI
             await loadProducts();
             updateCartDisplay();
-            
-            // Set up event listeners after data is loaded
+
+            // --- NEW: Load initial sales summary (e.g., for today) ---
+            await fetchAndDisplaySalesSummary(state.currentSalesPeriod); // Load default period
+            // --- END NEW ---
+
+            // Set up event listeners after UI elements are potentially ready
             setupEventListeners();
-            
+
             showNotification("System initialized successfully", "success", 2000);
         } catch (error) {
             console.error("Initialization error:", error);
-            showNotification("System initialization failed. Please check your connection.", "error", 5000);
+            showNotification("System initialization failed. Please check connection or contact support.", "error", 5000);
         } finally {
             hideLoading();
         }
     }
-    
+
     // Start initialization
     initData();
 
-    console.log("POS Application Initialized with Supabase Integration and Vendor Authentication.");
+    console.log("POS Application Initialized with Supabase Integration, Vendor Authentication, and Sales Summary.");
 }); // End of DOMContentLoaded

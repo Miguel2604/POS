@@ -12,26 +12,29 @@ contextBridge.exposeInMainWorld(
       getSession: () => ipcRenderer.invoke('auth-get-session'),
       getCurrentVendor: () => ipcRenderer.invoke('auth-get-current-vendor')
     },
-    
+
     // Database operations - these now require authentication
     students: {
       getAll: () => ipcRenderer.invoke('supabase-students-get'),
       getByUid: (uid) => ipcRenderer.invoke('supabase-student-get-by-uid', uid),
       save: (student) => ipcRenderer.invoke('supabase-students-save', student)
     },
-    
+
     // Vendor-specific operations
     products: {
       getAll: () => ipcRenderer.invoke('supabase-products-get'),
       save: (product) => ipcRenderer.invoke('supabase-products-save', product),
       delete: (id) => ipcRenderer.invoke('supabase-products-delete', id)
     },
-    
+
     transactions: {
       getAll: () => ipcRenderer.invoke('supabase-transactions-get'),
-      save: (transaction) => ipcRenderer.invoke('supabase-transactions-save', transaction)
+      save: (transaction) => ipcRenderer.invoke('supabase-transactions-save', transaction),
+      // --- NEW: Expose sales summary function ---
+      getSalesSummary: (period) => ipcRenderer.invoke('supabase-get-sales-summary', period)
+      // --- END NEW ---
     },
-    
+
     // Admin operations
     admin: {
       getInfo: () => ipcRenderer.invoke('supabase-admin-get-info'),

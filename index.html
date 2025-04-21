@@ -22,7 +22,7 @@
             transform: translateY(-3px);
             box-shadow: 0 5px 15px rgba(0, 0, 0, 0.3);
         }
-        
+
         .menu-item::after {
             content: '';
             position: absolute;
@@ -31,21 +31,21 @@
             width: 100%;
             height: 3px;
         }
-        
+
         .blue-item::after {
             background: linear-gradient(90deg, #3b82f6, #60a5fa);
         }
-        
+
         .green-item::after {
             background: linear-gradient(90deg, #10b981, #34d399);
         }
-        
+
         .yellow-item::after {
             background: linear-gradient(90deg, #f59e0b, #fbbf24);
         }
 
         /* Ensure modal is visually on top */
-        #payment-modal, #success-message, #error-message {
+        #payment-modal, #success-message, #error-message, #receipt-modal, #transaction-history-modal, #product-management-modal, #pin-modal, #loading-overlay {
              z-index: 50;
         }
 
@@ -53,28 +53,35 @@
         #payment-feedback {
              min-height: 1.5em;
         }
-        
+
         /* Hide scrollbar but allow scrolling */
         .hide-scrollbar::-webkit-scrollbar {
             display: none; /* for Chrome, Safari, and Opera */
         }
-        
+
         .hide-scrollbar {
             -ms-overflow-style: none;  /* for Internet Explorer and Edge */
             scrollbar-width: none;  /* for Firefox */
+        }
+
+        /* Style for active sales summary button */
+        .sales-summary-btn.active {
+            background-color: #4f46e5; /* Indigo */
+            color: white;
+            font-weight: bold;
         }
     </style>
 </head>
 <body class="bg-gray-100 font-sans">
     <div class="flex h-screen">
-        <!-- Left side - dark menu categories similar to the reference -->
         <div class="w-full md:w-2/3 lg:w-3/4 bg-gray-900 p-4 flex flex-col">
-            <header class="flex items-center justify-between mb-4">
+            <header class="flex flex-col sm:flex-row items-start sm:items-center justify-between mb-4 space-y-2 sm:space-y-0">
                 <div class="flex items-center">
                     <h1 class="text-xl font-bold text-white">PLM Canteen</h1>
                     <span class="text-gray-400 ml-3">•</span>
                     <span id="vendor-name" class="text-gray-300 ml-3 text-sm">Loading...</span>
                 </div>
+
                 <div class="flex space-x-2">
                     <button id="view-transactions-button" class="text-white bg-gray-700 hover:bg-gray-800 px-3 py-1 rounded-lg text-sm">
                         View Transactions
@@ -88,19 +95,32 @@
                 </div>
             </header>
 
-            <!-- Product list area with category styling -->
+            <div class="bg-gray-800 p-3 rounded-lg mb-4 flex flex-col sm:flex-row items-center justify-between">
+                <div class="text-white font-medium mb-2 sm:mb-0">Sales Summary:</div>
+                <div class="flex space-x-2">
+                    <button id="sales-summary-day-btn" data-period="day" class="sales-summary-btn text-white bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded-lg text-sm">
+                        Today
+                    </button>
+                    <button id="sales-summary-week-btn" data-period="week" class="sales-summary-btn text-white bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded-lg text-sm">
+                        This Week
+                    </button>
+                    <button id="sales-summary-month-btn" data-period="month" class="sales-summary-btn text-white bg-gray-600 hover:bg-gray-700 px-3 py-1 rounded-lg text-sm">
+                        This Month
+                    </button>
+                </div>
+                <div class="text-white text-lg font-bold mt-2 sm:mt-0 sm:ml-4">
+                    Total: <span id="sales-summary-display">₱0.00</span>
+                </div>
+            </div>
             <div id="product-list" class="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-4 gap-4 flex-grow overflow-y-auto hide-scrollbar">
-                <!-- Product items will be populated here via JavaScript -->
                 <div class="menu-item blue-item bg-gray-800 border border-blue-500 rounded-lg p-4 flex flex-col items-center justify-center cursor-pointer">
                     <span class="text-white font-medium text-center">Loading...</span>
                     <span class="text-blue-300 text-sm mt-1">Please wait</span>
                 </div>
             </div>
-            
-            <!-- Small button for database reset - tucked away but accessible -->
-        </div>
 
-        <!-- Right side - order summary similar to the reference -->
+            </div>
+
         <div class="hidden md:block md:w-1/3 lg:w-1/4 bg-white shadow-lg">
             <div class="flex flex-col h-full">
                 <div class="p-4 border-b">
@@ -108,14 +128,11 @@
                         <h2 class="text-lg font-bold">Order Summary</h2>
                     </div>
                 </div>
-                
-                <!-- Cart items -->
+
                 <div id="cart-items" class="flex-grow overflow-y-auto p-4 hide-scrollbar">
                     <p class="text-gray-500 italic initial-cart-message">Cart is empty.</p>
-                    <!-- Cart items will be populated here via JavaScript -->
-                </div>
-                
-                <!-- Order summary and payment section -->
+                    </div>
+
                 <div class="border-t p-4">
                     <div id="cart-summary" class="space-y-2">
                         <div class="flex justify-between">
@@ -140,7 +157,6 @@
         </div>
     </div>
 
-    <!-- Payment Modal -->
     <div id="payment-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden">
         <div class="bg-white p-8 rounded-lg shadow-xl w-full max-w-sm">
             <h3 class="text-xl font-semibold mb-4">Scan Student ID</h3>
@@ -158,13 +174,11 @@
         </div>
     </div>
 
-    <!-- Receipt Modal -->
-    <div id="receipt-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden z-50">
+    <div id="receipt-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden">
         <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
             <h3 class="text-xl font-semibold mb-4 text-center">Receipt</h3>
             <div id="receipt-content" class="text-sm mb-4">
-                <!-- Receipt details will be populated here -->
-            </div>
+                </div>
             <div class="flex justify-end space-x-3">
                 <button id="export-receipt-button" type="button" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Export</button>
                 <button id="close-receipt-button" type="button" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">Close</button>
@@ -172,47 +186,36 @@
         </div>
     </div>
 
-    <!-- Success and Error Messages -->
     <div id="success-message" class="fixed bottom-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg hidden">
     </div>
 
     <div id="error-message" class="fixed bottom-4 right-4 bg-red-500 text-white p-4 rounded-lg shadow-lg hidden">
     </div>
 
-    <!-- Loading Overlay -->
-    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden z-50">
+    <div id="loading-overlay" class="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center hidden">
         <div class="text-white text-xl font-semibold">Loading...</div>
     </div>
 
-    <!-- Transaction History Modal -->
-    <div id="transaction-history-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden z-50">
-        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <h2 class="text-2xl font-bold mb-4">Transaction History</h2>
-            <button id="close-transaction-history-button" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800">&times;</button>
-            <div id="pos-transaction-list" class="space-y-2">
-                <!-- Transactions will be populated here -->
-            </div>
+    <div id="transaction-history-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto relative"> <h2 class="text-2xl font-bold mb-4">Transaction History</h2>
+            <button id="close-transaction-history-button" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-2xl font-bold">&times;</button> <div id="pos-transaction-list" class="space-y-2">
+                </div>
         </div>
     </div>
 
-    <!-- Product Management Modal -->
-    <div id="product-management-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden z-50">
-        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto">
-            <h2 class="text-2xl font-bold mb-4">Product Management</h2>
-            <button id="close-product-management-button" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800">&times;</button>
-            <form id="admin-add-product-form" class="flex flex-col sm:flex-row gap-2 mb-4">
+    <div id="product-management-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-3xl max-h-[90vh] overflow-y-auto relative"> <h2 class="text-2xl font-bold mb-4">Product Management</h2>
+            <button id="close-product-management-button" class="absolute top-4 right-4 text-gray-600 hover:text-gray-800 text-2xl font-bold">&times;</button> <form id="admin-add-product-form" class="flex flex-col sm:flex-row gap-2 mb-4">
                 <input type="text" id="admin-product-name" placeholder="Product Name" required class="flex-1 border border-gray-300 rounded p-2">
                 <input type="number" id="admin-product-price" placeholder="Price" required min="0" step="0.01" class="w-32 border border-gray-300 rounded p-2">
                 <button type="submit" class="bg-green-600 hover:bg-green-700 text-white px-4 py-2 rounded">Add Product</button>
             </form>
             <div id="admin-product-list" class="space-y-2">
-                <!-- Product list will be populated here -->
-            </div>
+                </div>
         </div>
     </div>
 
-    <!-- PIN Modal -->
-    <div id="pin-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden z-50">
+    <div id="pin-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden">
         <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
             <h2 class="text-2xl font-bold mb-4 text-center">Enter PIN</h2>
             <input type="password" id="pin-input" class="w-full border border-gray-300 rounded p-3 mb-4 text-center text-lg" placeholder="Enter PIN">
@@ -224,12 +227,9 @@
         </div>
     </div>
 
-    <!-- Connection Status Indicator -->
-    <div id="connection-status" class="fixed top-2 left-2 bg-gray-800 text-white px-3 py-1 rounded-lg text-sm hidden">
-        <span id="connection-text">Connecting to Supabase...</span>
+    <div id="connection-status" class="fixed top-2 left-2 bg-gray-800 text-white px-3 py-1 rounded-lg text-sm hidden z-40"> <span id="connection-text">Connecting to Supabase...</span>
     </div>
 
-    <!-- Preload script and app.js -->
     <script src="app.js" defer></script>
 </body>
 </html>
