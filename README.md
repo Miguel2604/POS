@@ -122,9 +122,9 @@ university-canteen-pos/
 ### Technology Stack
 - **Electron**: Cross-platform desktop application framework
 - **Supabase**: Backend and authentication
-- **HTML**: User interface structure
 - **Tailwind CSS**: Styling
 - **JavaScript**: Application logic
+- **HTML**: User interface structure
 
 ## Troubleshooting
 
@@ -146,7 +146,6 @@ university-canteen-pos/
 
 MIT
 
-## Contributors
+## Developer
 
 - [Miguel Kalaw](https://github.com/Miguel2604)
-
