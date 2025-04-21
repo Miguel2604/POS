@@ -155,7 +155,19 @@
         </div>
     </div>
 
-
+    <!-- Receipt Modal -->
+    <div id="receipt-modal" class="fixed inset-0 bg-gray-800 bg-opacity-75 flex items-center justify-center hidden z-50">
+        <div class="bg-white p-6 rounded-lg shadow-xl w-full max-w-sm">
+            <h3 class="text-xl font-semibold mb-4 text-center">Receipt</h3>
+            <div id="receipt-content" class="text-sm mb-4">
+                <!-- Receipt details will be populated here -->
+            </div>
+            <div class="flex justify-end space-x-3">
+                <button id="export-receipt-button" type="button" class="bg-green-600 hover:bg-green-700 text-white font-bold py-2 px-4 rounded">Export</button>
+                <button id="close-receipt-button" type="button" class="bg-gray-400 hover:bg-gray-500 text-white font-bold py-2 px-4 rounded">Close</button>
+            </div>
+        </div>
+    </div>
 
     <!-- Success and Error Messages -->
     <div id="success-message" class="fixed bottom-4 right-4 bg-green-500 text-white p-4 rounded-lg shadow-lg hidden">

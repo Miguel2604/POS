@@ -4,7 +4,7 @@
  * Fixed button functionality
  */
 
-"use strict";
+"use strict"; 
 
 // Wait for the DOM to be fully loaded before running scripts
 document.addEventListener('DOMContentLoaded', () => {
@@ -40,6 +40,12 @@ document.addEventListener('DOMContentLoaded', () => {
         // Message Popups
         successMessageDiv: document.getElementById('success-message'),
         errorMessageDiv: document.getElementById('error-message'),
+        
+        // Receipt Modal Elements
+        receiptModal: document.getElementById('receipt-modal'),
+        receiptContentDiv: document.getElementById('receipt-content'),
+        exportReceiptButton: document.getElementById('export-receipt-button'),
+        closeReceiptButton: document.getElementById('close-receipt-button'),
         
         // Admin Panel Elements
         
@@ -526,8 +532,8 @@ document.addEventListener('DOMContentLoaded', () => {
             state.cart = [];
             updateCartDisplay();
 
-            // Reset payment modal
-            closePaymentModal();
+            // Display receipt
+            openReceiptModal(transaction);
 
             console.log("Payment processed successfully:", transaction);
             state.paymentInProgress = false; // Reset flag earlier
@@ -591,6 +597,43 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (ui.rfidInput) ui.rfidInput.focus();
             }, 100);
         }
+    }
+
+    function openReceiptModal(receiptDetails) {
+        if (ui.receiptModal && ui.receiptContentDiv) {
+            // Format and display receipt details (placeholder for now)
+            ui.receiptContentDiv.innerHTML = formatReceiptContent(receiptDetails);
+            ui.receiptModal.classList.remove('hidden');
+        }
+    }
+
+    function closeReceiptModal() {
+        if (ui.receiptModal) {
+            ui.receiptModal.classList.add('hidden');
+            // Also close the payment modal after the receipt is viewed
+            closePaymentModal();
+        }
+    }
+
+    // Function for receipt formatting
+    function formatReceiptContent(details) {
+        let content = `<strong>Transaction ID:</strong> ${details.transaction_id}<br>`;
+        content += `<strong>Date:</strong> ${new Date(details.timestamp).toLocaleString()}<br>`;
+        content += `<strong>Student ID:</strong> ${details.student_uid}<br>`;
+        content += `<strong>Total Amount:</strong> ₱${details.total_amount.toFixed(2)}<br>`;
+        content += `<strong>Items:</strong><br>`;
+        
+        try {
+            const items = JSON.parse(details.items);
+            items.forEach(item => {
+                content += `- ${item.name} x${item.quantity} (₱${(item.price * item.quantity).toFixed(2)})<br>`;
+            });
+        } catch (e) {
+            content += 'Error loading item details.';
+            console.error('Error parsing receipt items:', e);
+        }
+        
+        return content;
     }
 
     function closePaymentModal() {
@@ -875,6 +918,22 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (ui.menuModal) {
                     ui.menuModal.classList.add('hidden');
                 }
+            });
+        }
+        
+        // Receipt modal buttons
+        if (ui.closeReceiptButton) {
+            ui.closeReceiptButton.addEventListener('click', () => {
+                console.log("Close receipt button clicked");
+                closeReceiptModal();
+            });
+        }
+
+        if (ui.exportReceiptButton) {
+            ui.exportReceiptButton.addEventListener('click', () => {
+                console.log("Export receipt button clicked");
+                // TODO: Implement export functionality
+                showNotification("Export functionality not yet implemented.", "info");
             });
         }
         
