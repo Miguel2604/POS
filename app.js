@@ -345,9 +345,9 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Updated to fetch student from Supabase if not found locally
-    async function handleRfidScan(rawUid) {
-        const uid = rawUid.trim(); // Trim whitespace from input
-        console.log(`Handling RFID scan for trimmed UID: "${uid}"`);
+    async function handleRfidScan(uid) {
+        // const uid = rawUid.trim(); // Removed trim based on user feedback
+        console.log(`Handling RFID scan for raw UID: "${uid}"`);
         ui.paymentFeedbackDiv.textContent = '';
         ui.paymentFeedbackDiv.classList.remove('text-red-600');
         ui.studentInfoDiv.classList.add('hidden');
@@ -420,7 +420,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         try {
             // Always perform a fresh scan using current RFID input value
-            const uid = ui.rfidInput.value.trim();
+            const uid = ui.rfidInput.value; // Removed trim based on user feedback
 
             let student = state.students[uid];
             console.log("Local student lookup during payment:", student);
@@ -809,21 +809,33 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // RFID input handles the RFID scan
         if (ui.rfidInput) {
-            ui.rfidInput.addEventListener('change', (e) => {
-                console.log("RFID input detected");
-                handleRfidScan(e.target.value);
-            });
-            
-            // Also handle the Enter key for RFID input
+            // Listen for keydown to capture Enter key after scan
             ui.rfidInput.addEventListener('keydown', (e) => {
                 if (e.key === 'Enter') {
                     e.preventDefault();
                     console.log("Enter key pressed in RFID input");
-                    if (!ui.confirmPaymentButton.disabled && !state.paymentInProgress) {
-                        state.paymentInProgress = true;
-                        processPayment();
+                    const scannedId = ui.rfidInput.value;
+                    // Check if the input has exactly 10 digits (assuming RFID provides 10 digits)
+                    if (scannedId.length === 10) {
+                        console.log("10 digits received, attempting student lookup.");
+                        handleRfidScan(scannedId);
+                    } else {
+                        console.warn(`Input length is not 10 (${scannedId.length}). Not triggering lookup.`);
+                        // Optionally provide feedback to the user if the scan was incomplete
+                        ui.paymentFeedbackDiv.textContent = 'Incomplete scan. Please try again.';
+                        ui.paymentFeedbackDiv.classList.add('text-red-600');
+                        ui.rfidInput.value = ''; // Clear input for next scan
                     }
                 }
+            });
+            
+            // Clear feedback and student info when input changes
+            ui.rfidInput.addEventListener('input', () => {
+                ui.paymentFeedbackDiv.textContent = '';
+                ui.paymentFeedbackDiv.classList.remove('text-red-600');
+                ui.studentInfoDiv.classList.add('hidden');
+                state.currentStudent = null;
+                ui.confirmPaymentButton.disabled = true;
             });
         }
         
@@ -866,22 +878,22 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        // Pin modal buttons
-        if (ui.pinCancelButton) {
-            ui.pinCancelButton.addEventListener('click', () => {
-                console.log("PIN cancel button clicked");
-                if (ui.pinModal) {
-                    ui.pinModal.classList.add('hidden');
-                }
-            });
-        }
+        // // Pin modal buttons
+        // if (ui.pinCancelButton) {
+        //     ui.pinCancelButton.addEventListener('click', () => {
+        //         console.log("PIN cancel button clicked");
+        //         if (ui.pinModal) {
+        //             ui.pinModal.classList.add('hidden');
+        //         }
+        //     });
+        // }
         
-        if (ui.pinConfirmButton) {
-            ui.pinConfirmButton.addEventListener('click', () => {
-                console.log("PIN confirm button clicked");
-                // PIN confirmation logic would go here
-            });
-        }
+        // if (ui.pinConfirmButton) {
+        //     ui.pinConfirmButton.addEventListener('click', () => {
+        //         console.log("PIN confirm button clicked");
+        //         // PIN confirmation logic would go here
+        //     });
+        // }
         
         console.log("Event listeners set up successfully");
     }

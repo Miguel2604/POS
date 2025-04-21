@@ -1,4 +1,4 @@
-// main.js - Complete version with shared students
+// main.js - Complete version with admin functionality integrated
 
 const { app, BrowserWindow, ipcMain } = require('electron');
 const path = require('path');
@@ -11,8 +11,9 @@ const SUPABASE_ANON_KEY = 'eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9.eyJpc3MiOiJzdXBh
 // Initialize Supabase
 const supabase = createClient(SUPABASE_URL, SUPABASE_ANON_KEY);
 
-// Store the current vendor ID 
+// Store the current user role information
 let currentVendorId = null;
+let currentAdminId = null;
 let authSession = null;
 let mainWindow = null;
 
@@ -31,32 +32,40 @@ async function checkAuthAndLoadPage() {
       // Store the session
       authSession = data.session;
       
-      // Get vendor information
+      // First check if user is a vendor
       const { data: vendorData, error: vendorError } = await supabase
         .from('vendors')
         .select('*')
         .eq('user_id', data.session.user.id)
         .single();
         
-      if (vendorError) {
-        console.error('Vendor fetch error:', vendorError);
-        mainWindow.loadFile(path.join(__dirname, 'login.html'));
+      if (!vendorError && vendorData) {
+        // User is a vendor
+        currentVendorId = vendorData.id;
+        mainWindow.loadFile(path.join(__dirname, 'index.html'));
         return;
       }
       
-      if (vendorData) {
-        // Store the current vendor ID
-        currentVendorId = vendorData.id;
-        // Load main application page
-        mainWindow.loadFile(path.join(__dirname, 'index.html'));
-        return;
-      } else {
-        console.error('No vendor account found for this user');
-        // Sign out the user since they don't have a vendor account
-        await supabase.auth.signOut();
-        mainWindow.loadFile(path.join(__dirname, 'login.html'));
+      // If not a vendor, check if user is an admin
+      const { data: adminData, error: adminError } = await supabase
+        .from('admins')
+        .select('*')
+        .eq('user_id', data.session.user.id)
+        .single();
+        
+      if (!adminError && adminData) {
+        // User is an admin
+        currentAdminId = adminData.id;
+        mainWindow.loadFile(path.join(__dirname, 'admin.html'));
         return;
       }
+      
+      // User is neither vendor nor admin
+      console.error('No vendor account or admin account found for this user');
+      // Sign out the user since they don't have a role
+      await supabase.auth.signOut();
+      mainWindow.loadFile(path.join(__dirname, 'login.html'));
+      return;
     }
     
     // No active session, load login page
@@ -76,7 +85,8 @@ function createWindow() {
       preload: path.join(__dirname, 'preload.js'),
       contextIsolation: true,
       nodeIntegration: false
-    }
+    },
+    autoHideMenuBar: true
   });
 
   // Check authentication and load appropriate page
@@ -112,28 +122,44 @@ ipcMain.handle('auth-login', async (event, { email, password }) => {
     // Store the user session
     authSession = data.session;
     
-    // Get vendor information
+    // First, check if user is a vendor
     const { data: vendorData, error: vendorError } = await supabase
       .from('vendors')
       .select('*')
       .eq('user_id', data.user.id)
       .single();
       
-    if (vendorError) throw vendorError;
-    
-    if (!vendorData) {
-      // Sign out the user since they don't have a vendor account
-      await supabase.auth.signOut();
-      throw new Error('No vendor account associated with this user. Please contact your administrator.');
+    if (!vendorError && vendorData) {
+      // User is a vendor
+      currentVendorId = vendorData.id;
+      return {
+        role: 'vendor',
+        user: data.user,
+        vendor: vendorData
+      };
     }
     
-    // Store the current vendor ID
-    currentVendorId = vendorData.id;
+    // If not a vendor, check if user is an admin
+    const { data: adminData, error: adminError } = await supabase
+      .from('admins')
+      .select('*')
+      .eq('user_id', data.user.id)
+      .single();
+      
+    if (!adminError && adminData) {
+      // User is an admin
+      currentAdminId = adminData.id;
+      return {
+        role: 'admin',
+        user: data.user,
+        admin: adminData
+      };
+    }
     
-    return {
-      user: data.user,
-      vendor: vendorData
-    };
+    // User has no role
+    // Sign out the user since they don't have a role
+    await supabase.auth.signOut();
+    throw new Error('No vendor or admin account associated with this user. Please contact your administrator.');
   } catch (error) {
     console.error('Login error:', error);
     throw error;
@@ -145,8 +171,9 @@ ipcMain.handle('auth-logout', async () => {
     const { error } = await supabase.auth.signOut();
     if (error) throw error;
     
-    // Clear vendor ID and session
+    // Clear user IDs and session
     currentVendorId = null;
+    currentAdminId = null;
     authSession = null;
     
     // Redirect to login page
@@ -168,22 +195,71 @@ ipcMain.handle('auth-get-session', async () => {
       // Store the session
       authSession = data.session;
       
-      // Get vendor information
-      const { data: vendorData, error: vendorError } = await supabase
+      // If we're already authenticated as a vendor, return vendor info
+      if (currentVendorId) {
+        const { data: vendorData, error: vendorError } = await supabase
+          .from('vendors')
+          .select('*')
+          .eq('id', currentVendorId)
+          .single();
+          
+        if (vendorError) throw vendorError;
+        
+        return {
+          role: 'vendor',
+          user: data.session.user,
+          vendor: vendorData,
+          session: data.session
+        };
+      }
+      
+      // If we're already authenticated as an admin, return admin info
+      if (currentAdminId) {
+        const { data: adminData, error: adminError } = await supabase
+          .from('admins')
+          .select('*')
+          .eq('id', currentAdminId)
+          .single();
+          
+        if (adminError) throw adminError;
+        
+        return {
+          role: 'admin',
+          user: data.session.user,
+          admin: adminData,
+          session: data.session
+        };
+      }
+      
+      // We have a session but no role stored, check both roles
+      const { data: vendorData } = await supabase
         .from('vendors')
         .select('*')
         .eq('user_id', data.session.user.id)
         .single();
         
-      if (vendorError) throw vendorError;
-      
       if (vendorData) {
-        // Store the current vendor ID
         currentVendorId = vendorData.id;
-        
         return {
+          role: 'vendor',
           user: data.session.user,
           vendor: vendorData,
+          session: data.session
+        };
+      }
+      
+      const { data: adminData } = await supabase
+        .from('admins')
+        .select('*')
+        .eq('user_id', data.session.user.id)
+        .single();
+        
+      if (adminData) {
+        currentAdminId = adminData.id;
+        return {
+          role: 'admin',
+          user: data.session.user,
+          admin: adminData,
           session: data.session
         };
       }
@@ -196,6 +272,7 @@ ipcMain.handle('auth-get-session', async () => {
   }
 });
 
+// Vendor-specific IPC handlers
 ipcMain.handle('auth-get-current-vendor', async () => {
   if (!currentVendorId || !authSession) {
     return null;
@@ -220,9 +297,10 @@ ipcMain.handle('auth-get-current-vendor', async () => {
 // Modified data handlers for shared students
 ipcMain.handle('supabase-students-get', async () => {
   try {
-    if (!currentVendorId) throw new Error('No vendor logged in');
+    // Check if user is authenticated
+    if (!currentVendorId && !currentAdminId) throw new Error('Not authenticated');
     
-    // No vendor filtering - all vendors can see all students
+    // No vendor filtering - all vendors/admins can see all students
     const { data, error } = await supabase
       .from('students')
       .select('*');
@@ -237,38 +315,40 @@ ipcMain.handle('supabase-students-get', async () => {
 
 // Handler to get a single student by UID
 ipcMain.handle('supabase-student-get-by-uid', async (event, uid) => {
-  console.log(`[main.js] Received request for supabase-student-get-by-uid with UID: "${uid}"`); // Log received UID
+  console.log(`[main.js] Received request for supabase-student-get-by-uid with UID: "${uid}"`);
   try {
-    if (!currentVendorId) throw new Error('No vendor logged in');
+    // Check if user is authenticated
+    if (!currentVendorId && !currentAdminId) throw new Error('Not authenticated');
     
-    console.log(`[main.js] Querying Supabase for student with UID: "${uid}"`); // Log before query
+    console.log(`[main.js] Querying Supabase for student with UID: "${uid}"`);
     const { data, error } = await supabase
       .from('students')
       .select('*')
       .eq('uid', uid)
-      .single(); // Expecting only one student or null
+      .single();
       
     if (error && error.code !== 'PGRST116') { // Ignore 'Row not found' error, return null instead
-      console.error(`[main.js] Supabase error fetching UID ${uid}:`, error); // Log actual Supabase errors
+      console.error(`[main.js] Supabase error fetching UID ${uid}:`, error);
       throw error;
     }
     
     if (!data) {
-      console.log(`[main.js] Student with UID "${uid}" not found in Supabase.`); // Log if not found
+      console.log(`[main.js] Student with UID "${uid}" not found in Supabase.`);
     } else {
-      console.log(`[main.js] Found student data for UID "${uid}":`, data); // Log if found
+      console.log(`[main.js] Found student data for UID "${uid}":`, data);
     }
     
     return data; // Returns the student object or null if not found
   } catch (error) {
-    console.error(`[main.js] General error fetching student by UID ${uid}:`, error); // Log any other errors
+    console.error(`[main.js] General error fetching student by UID ${uid}:`, error);
     throw error;
   }
 });
 
 ipcMain.handle('supabase-students-save', async (event, student) => {
   try {
-    if (!currentVendorId) throw new Error('No vendor logged in');
+    // Check if user is authenticated
+    if (!currentVendorId && !currentAdminId) throw new Error('Not authenticated');
     
     // No vendor_id for students, they are shared across all vendors
     const { data, error } = await supabase
@@ -352,17 +432,32 @@ ipcMain.handle('supabase-products-delete', async (event, id) => {
 
 ipcMain.handle('supabase-transactions-get', async () => {
   try {
-    if (!currentVendorId) throw new Error('No vendor logged in');
+    if (!currentVendorId && !currentAdminId) throw new Error('Not authenticated');
     
-    // Transactions are still vendor-specific
-    const { data, error } = await supabase
-      .from('transactions')
-      .select('*')
-      .eq('vendor_id', currentVendorId)
-      .order('timestamp', { ascending: false });
-      
-    if (error) throw error;
-    return data;
+    // For vendors, only show their transactions
+    if (currentVendorId) {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .eq('vendor_id', currentVendorId)
+        .order('timestamp', { ascending: false });
+        
+      if (error) throw error;
+      return data;
+    }
+    
+    // For admins, show all transactions
+    if (currentAdminId) {
+      const { data, error } = await supabase
+        .from('transactions')
+        .select('*')
+        .order('timestamp', { ascending: false });
+        
+      if (error) throw error;
+      return data;
+    }
+    
+    return [];
   } catch (error) {
     console.error('Error fetching transactions:', error);
     throw error;
@@ -395,6 +490,221 @@ ipcMain.handle('supabase-transactions-save', async (event, transaction) => {
     return data;
   } catch (error) {
     console.error('Error saving transaction:', error);
+    throw error;
+  }
+});
+
+// Admin IPC Handlers
+ipcMain.handle('supabase-admin-get-info', async () => {
+  try {
+    if (!currentAdminId || !authSession) {
+      return null;
+    }
+    
+    const { data, error } = await supabase
+      .from('admins')
+      .select('*')
+      .eq('id', currentAdminId)
+      .single();
+      
+    if (error) throw error;
+    return data;
+  } catch (error) {
+    console.error('Get admin info error:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('supabase-admin-get-student-by-uid', async (event, uid) => {
+  try {
+    if (!currentAdminId) throw new Error('Not authorized as admin');
+    
+    const { data, error } = await supabase
+      .from('students')
+      .select('*')
+      .eq('uid', uid)
+      .single();
+      
+    if (error && error.code !== 'PGRST116') throw error; // Ignore 'not found' error
+    return data;
+  } catch (error) {
+    console.error('Admin get student error:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('supabase-admin-topup-balance', async (event, studentUid, amount) => {
+  try {
+    if (!currentAdminId) throw new Error('Not authorized as admin');
+    
+    // Get admin information
+    const { data: adminData, error: adminError } = await supabase
+      .from('admins')
+      .select('*')
+      .eq('id', currentAdminId)
+      .single();
+      
+    if (adminError) throw adminError;
+    
+    // Begin transaction
+    // 1. Get current student
+    const { data: student, error: studentError } = await supabase
+      .from('students')
+      .select('*')
+      .eq('uid', studentUid)
+      .single();
+      
+    if (studentError) throw studentError;
+    
+    // 2. Update balance
+    const newBalance = student.balance + amount;
+    const { data: updatedStudent, error: updateError } = await supabase
+      .from('students')
+      .update({ balance: newBalance })
+      .eq('uid', studentUid)
+      .select()
+      .single();
+      
+    if (updateError) throw updateError;
+    
+    // 3. Record transaction
+    const { error: transactionError } = await supabase
+      .from('balance_transactions')
+      .insert({
+        student_uid: studentUid,
+        amount: amount,
+        admin_id: currentAdminId,
+        admin_name: adminData.name,
+        timestamp: new Date().toISOString(),
+        type: 'topup'
+      });
+      
+    if (transactionError) throw transactionError;
+    
+    return updatedStudent;
+  } catch (error) {
+    console.error('Admin topup error:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('supabase-admin-get-student-transactions', async (event, studentUid) => {
+  try {
+    if (!currentAdminId) throw new Error('Not authorized as admin');
+    
+    // Get purchase transactions
+    const { data: purchaseTransactions, error: purchaseError } = await supabase
+      .from('transactions')
+      .select('*')
+      .eq('student_uid', studentUid)
+      .order('timestamp', { ascending: false })
+      .limit(5);
+    
+    if (purchaseError) throw purchaseError;
+    
+    // Get top-up transactions
+    const { data: topupTransactions, error: topupError } = await supabase
+      .from('balance_transactions')
+      .select('*')
+      .eq('student_uid', studentUid)
+      .order('timestamp', { ascending: false })
+      .limit(5);
+    
+    if (topupError) throw topupError;
+    
+    // Combine and process transactions
+    const allTransactions = [
+      ...(purchaseTransactions || []).map(tx => ({
+        ...tx,
+        type: 'purchase'
+      })),
+      ...(topupTransactions || []).map(tx => ({
+        ...tx,
+        type: 'topup'
+      }))
+    ];
+    
+    // Sort by timestamp (newest first)
+    allTransactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    return allTransactions.slice(0, 5);
+  } catch (error) {
+    console.error('Get student transactions error:', error);
+    throw error;
+  }
+});
+
+ipcMain.handle('supabase-admin-get-all-transactions', async (event, filters) => {
+  try {
+    if (!currentAdminId) throw new Error('Not authorized as admin');
+    
+    const { startDate, type, searchTerm } = filters || {};
+    
+    // Get purchase transactions if needed
+    let purchaseTransactions = [];
+    if (!type || type === 'all' || type === 'purchase') {
+      let purchaseQuery = supabase
+        .from('transactions')
+        .select('*, students!inner(name)')
+        .order('timestamp', { ascending: false });
+      
+      if (startDate) {
+        purchaseQuery = purchaseQuery.gte('timestamp', startDate);
+      }
+      
+      const { data, error } = await purchaseQuery;
+      
+      if (error) throw error;
+      purchaseTransactions = data || [];
+    }
+    
+    // Get top-up transactions if needed
+    let topupTransactions = [];
+    if (!type || type === 'all' || type === 'topup') {
+      let topupQuery = supabase
+        .from('balance_transactions')
+        .select('*, students!inner(name)')
+        .order('timestamp', { ascending: false });
+      
+      if (startDate) {
+        topupQuery = topupQuery.gte('timestamp', startDate);
+      }
+      
+      const { data, error } = await topupQuery;
+      
+      if (error) throw error;
+      topupTransactions = data || [];
+    }
+    
+    // Process and combine transactions
+    const processedPurchases = purchaseTransactions.map(tx => ({
+      ...tx,
+      type: 'purchase',
+      student_name: tx.students?.name || 'Unknown'
+    }));
+    
+    const processedTopups = topupTransactions.map(tx => ({
+      ...tx,
+      type: 'topup',
+      student_name: tx.students?.name || 'Unknown'
+    }));
+    
+    let allTransactions = [...processedPurchases, ...processedTopups];
+    
+    // Apply search filter if provided
+    if (searchTerm) {
+      allTransactions = allTransactions.filter(tx => 
+        (tx.student_uid && tx.student_uid.toLowerCase().includes(searchTerm.toLowerCase())) ||
+        (tx.student_name && tx.student_name.toLowerCase().includes(searchTerm.toLowerCase()))
+      );
+    }
+    
+    // Sort by timestamp (newest first)
+    allTransactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+    
+    return allTransactions;
+  } catch (error) {
+    console.error('Get all transactions error:', error);
     throw error;
   }
 });

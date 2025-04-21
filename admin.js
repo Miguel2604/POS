@@ -51,6 +51,7 @@ document.addEventListener('DOMContentLoaded', () => {
         totalCount: document.getElementById('total-count'),
         prevPage: document.getElementById('prev-page'),
         nextPage: document.getElementById('next-page'),
+        exportButton: document.getElementById('export-transactions-button'), // Added export button
         
         // Notifications and Overlays
         successMessage: document.getElementById('success-message'),
@@ -402,10 +403,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 state.currentPage++;
                 loadTransactionHistory();
             }
-        });
-    }
-    
-    async function loadTransactionHistory() {
+         });
+         
+         // Export button
+         ui.exportButton.addEventListener('click', () => exportTransactionHistory());
+     }
+     
+     async function loadTransactionHistory() {
         ui.transactionsLoading.classList.remove('hidden');
         ui.noTransactions.classList.add('hidden');
         ui.transactionsBody.innerHTML = '';
@@ -495,6 +499,83 @@ document.addEventListener('DOMContentLoaded', () => {
             showNotification('Error loading transaction history', 'error');
             ui.transactionsLoading.classList.add('hidden');
             ui.noTransactions.classList.remove('hidden');
+        }
+    }
+
+    async function exportTransactionHistory() {
+        showLoading();
+        try {
+            // Get current filters
+            const filters = {
+                type: ui.typeFilter.value,
+                searchTerm: ui.transactionSearch.value.trim()
+            };
+
+            const dateFilter = ui.dateFilter.value;
+            if (dateFilter !== 'all') {
+                let startDate = new Date();
+
+                if (dateFilter === 'today') {
+                    startDate.setHours(0, 0, 0, 0);
+                } else if (dateFilter === 'week') {
+                    startDate.setDate(startDate.getDate() - startDate.getDay());
+                    startDate.setHours(0, 0, 0, 0);
+                } else if (dateFilter === 'month') {
+                    startDate.setDate(1);
+                    startDate.setHours(0, 0, 0, 0);
+                }
+
+                filters.startDate = startDate.toISOString();
+            }
+
+            // Fetch all transactions based on current filters (no pagination for export)
+            const transactionsToExport = await window.api.admin.getAllTransactions(filters);
+
+            if (!transactionsToExport || transactionsToExport.length === 0) {
+                showNotification('No transactions found to export with the current filters.', 'info');
+                return;
+            }
+
+            // Format data as CSV
+            const csvHeader = ["Date", "Student ID", "Student Name", "Source", "Amount", "Type"];
+            const csvRows = transactionsToExport.map(tx => {
+                const date = new Date(tx.timestamp);
+                const formattedDate = date.toLocaleDateString() + ' ' + date.toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+                const amount = tx.type === 'purchase' ? -tx.total_amount : tx.amount;
+                const source = tx.type === 'purchase' ? (tx.vendor_name || 'Canteen') : (tx.admin_name || 'Admin');
+                const type = tx.type === 'purchase' ? 'Purchase' : 'Top Up';
+
+                return [
+                    `"${formattedDate}"`,
+                    `"${tx.student_uid}"`,
+                    `"${tx.student_name || 'Unknown'}"`,
+                    `"${source}"`,
+                    amount.toFixed(2),
+                    `"${type}"`
+                ].join(',');
+            });
+
+            const csvContent = [csvHeader.join(','), ...csvRows].join('\n');
+
+            // Trigger download
+            const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+            const link = document.createElement('a');
+            const url = URL.createObjectURL(blob);
+
+            link.setAttribute('href', url);
+            link.setAttribute('download', 'transaction_history.csv');
+            link.style.visibility = 'hidden';
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+
+            showNotification('Transaction history exported successfully.', 'success');
+
+        } catch (error) {
+            console.error('Export transactions error:', error);
+            showNotification('Error exporting transaction history: ' + error.message, 'error');
+        } finally {
+            hideLoading();
         }
     }
 

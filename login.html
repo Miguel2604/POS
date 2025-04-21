@@ -57,7 +57,7 @@
     <div class="auth-card w-full max-w-md p-6">
         <div class="text-center mb-6">
             <h1 class="text-2xl font-bold text-gray-800">UNIVERSITY POS SYSTEM</h1>
-            <p class="text-gray-600">Vendor Login</p>
+            <p class="text-gray-600">Staff Login</p>
         </div>
         
         <!-- Login Form -->
@@ -105,7 +105,17 @@
                 });
                 
                 // Login successful
-                window.location.href = 'index.html';
+                if (result.role === 'vendor') {
+                    // Redirect to vendor interface
+                    window.location.href = 'index.html';
+                } else if (result.role === 'admin') {
+                    // Redirect to admin interface
+                    window.location.href = 'admin.html';
+                } else {
+                    // Unknown role
+                    showLoading(false);
+                    showMessage('Unknown user role. Please contact administrator.', 'error');
+                }
             } catch (error) {
                 showLoading(false);
                 showMessage(error.message || 'Login failed', 'error');
@@ -147,15 +157,24 @@
         window.addEventListener('DOMContentLoaded', async () => {
             try {
                 showLoading(true);
-                const { session } = await window.api.auth.getSession();
+                const result = await window.api.auth.getSession();
                 
-                if (session) {
-                    // Already logged in, redirect to main app
-                    window.location.href = 'index.html';
+                if (result.session) {
+                    // Already logged in, check role and redirect
+                    if (result.role === 'vendor') {
+                        window.location.href = 'index.html';
+                    } else if (result.role === 'admin') {
+                        window.location.href = 'admin.html';
+                    } else {
+                        // Unknown role, stay on login page
+                        showLoading(false);
+                        showMessage('Unknown user role. Please contact administrator.', 'error');
+                    }
+                } else {
+                    showLoading(false);
                 }
             } catch (error) {
                 console.error('Session check error:', error);
-            } finally {
                 showLoading(false);
             }
         });
