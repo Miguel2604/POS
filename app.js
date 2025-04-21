@@ -18,7 +18,10 @@ document.addEventListener('DOMContentLoaded', () => {
         cancelPaymentButton: document.getElementById('cancel-payment-button'),
         confirmPaymentButton: document.getElementById('confirm-payment-button'),
         logoutButton: document.getElementById('logout-button'),
-        menuButton: document.getElementById('menu-button'),
+        
+        // Header Buttons
+        viewTransactionsButton: document.getElementById('view-transactions-button'), // Added View Transactions button
+        manageMenuButton: document.getElementById('manage-menu-button'), // Renamed Menu button
 
         // Modal Elements
         paymentModal: document.getElementById('payment-modal'),
@@ -49,12 +52,15 @@ document.addEventListener('DOMContentLoaded', () => {
         
         // Admin Panel Elements
         
-        // Menu Management Elements
-        menuModal: document.getElementById('menu-modal'),
-        closeMenuButton: document.getElementById('close-menu-button'),
-        exitMenuButton: document.getElementById('exit-menu-button'),
+        // Transaction History Modal Elements
+        transactionHistoryModal: document.getElementById('transaction-history-modal'),
+        closeTransactionHistoryButton: document.getElementById('close-transaction-history-button'),
+        posTransactionList: document.getElementById('pos-transaction-list'), // Renamed transaction list div
+
+        // Product Management Modal Elements
+        productManagementModal: document.getElementById('product-management-modal'),
+        closeProductManagementButton: document.getElementById('close-product-management-button'),
         adminProductList: document.getElementById('admin-product-list'),
-        adminTransactionList: document.getElementById('admin-transaction-list'),
         adminAddProductForm: document.getElementById('admin-add-product-form'),
         
         // PIN Modal Elements
@@ -654,18 +660,19 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Menu Panel Rendering
-    async function renderMenuPanel() {
-        console.log("Rendering menu panel");
-        
-        // Render transactions
-        if (ui.adminTransactionList) {
-            ui.adminTransactionList.innerHTML = '';
-            const transactions = await getAllTransactions();
+    // Transaction History Rendering
+    async function renderTransactionHistory() {
+        console.log("Rendering transaction history panel");
+        if (ui.posTransactionList) {
+            ui.posTransactionList.innerHTML = '';
+            const transactions = await getAllTransactions(); // Assuming this fetches all transactions
             
             if (transactions.length === 0) {
-                ui.adminTransactionList.innerHTML = '<p class="text-gray-500 italic">No transactions yet.</p>';
+                ui.posTransactionList.innerHTML = '<p class="text-gray-500 italic">No transactions yet.</p>';
             } else {
+                // Sort transactions by timestamp descending
+                transactions.sort((a, b) => new Date(b.timestamp) - new Date(a.timestamp));
+
                 transactions.forEach(tx => {
                     const div = document.createElement('div');
                     div.className = 'border p-2 rounded';
@@ -677,12 +684,15 @@ document.addEventListener('DOMContentLoaded', () => {
                         Total: ₱${tx.total_amount !== undefined ? tx.total_amount.toFixed(2) : 'N/A'}<br>
                         Items: ${typeof tx.items === 'string' ? JSON.parse(tx.items).map(i => `${i.name} x${i.quantity}`).join(', ') : 'N/A - Invalid items data'}`;
 
-                    ui.adminTransactionList.appendChild(div);
+                    ui.posTransactionList.appendChild(div);
                 });
             }
         }
-        
-        // Render products
+    }
+
+    // Product Management Rendering
+    async function renderProductManagement() {
+        console.log("Rendering product management panel");
         if (ui.adminProductList && ui.adminAddProductForm) {
             async function renderProductList() {
                 const products = await getAllProducts();
@@ -728,7 +738,7 @@ document.addEventListener('DOMContentLoaded', () => {
                             await saveProduct({ id: product.id, name: newName, price: newPrice });
                             showNotification('Product updated successfully', 'success');
                             await renderProductList();
-                            await loadProducts();
+                            await loadProducts(); // Reload products in main POS view
                         } catch (error) {
                             console.error('Update product error:', error);
                             showNotification('Failed to update product', 'error');
@@ -747,7 +757,7 @@ document.addEventListener('DOMContentLoaded', () => {
                                 await deleteProduct(product.id);
                                 showNotification('Product deleted successfully', 'success');
                                 await renderProductList();
-                                await loadProducts();
+                                await loadProducts(); // Reload products in main POS view
                             } catch (error) {
                                 console.error('Delete product error:', error);
                                 showNotification('Failed to delete product', 'error');
@@ -787,7 +797,7 @@ document.addEventListener('DOMContentLoaded', () => {
                     nameInput.value = '';
                     priceInput.value = '';
                     await renderProductList();
-                    await loadProducts();
+                    await loadProducts(); // Reload products in main POS view
                 } catch (error) {
                     console.error('Add product error:', error);
                     showNotification('Failed to add product', 'error');
@@ -796,20 +806,7 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
         }
-
-        // Top Up Button - First Show PIN Modal
-        const ADMIN_PIN = "1234"; // This should be stored more securely in a real app
-
-        // Export data functionality removed as requested
-
-        // Student search functionality
-        const searchInput = document.getElementById('admin-student-search');
-        if (searchInput) {
-            searchInput.addEventListener('input', () => {
-                renderAdminPanel(searchInput.value.trim().toLowerCase());
-            });
-        }
-    } // <-- ADDED MISSING CLOSING BRACE HERE
+    }
 
     // --- Event Listeners ---
     function setupEventListeners() {
@@ -890,33 +887,44 @@ document.addEventListener('DOMContentLoaded', () => {
             });
         }
         
-        // Menu button opens the menu management modal
-        if (ui.menuButton) {
-            ui.menuButton.addEventListener('click', async () => {
-                console.log("Menu button clicked");
-                if (ui.menuModal) {
-                    await renderMenuPanel();
-                    ui.menuModal.classList.remove('hidden');
+        // View Transactions button opens the transaction history modal
+        if (ui.viewTransactionsButton) {
+            ui.viewTransactionsButton.addEventListener('click', async () => {
+                console.log("View Transactions button clicked");
+                if (ui.transactionHistoryModal) {
+                    await renderTransactionHistory();
+                    ui.transactionHistoryModal.classList.remove('hidden');
+                }
+            });
+        }
+
+        // Manage Menu button opens the product management modal
+        if (ui.manageMenuButton) {
+            ui.manageMenuButton.addEventListener('click', async () => {
+                console.log("Manage Menu button clicked");
+                if (ui.productManagementModal) {
+                    await renderProductManagement();
+                    ui.productManagementModal.classList.remove('hidden');
                 }
             });
         }
         
-        // Close menu button closes the menu management modal
-        if (ui.closeMenuButton) {
-            ui.closeMenuButton.addEventListener('click', () => {
-                console.log("Close menu button clicked");
-                if (ui.menuModal) {
-                    ui.menuModal.classList.add('hidden');
+        // Close Transaction History modal button
+        if (ui.closeTransactionHistoryButton) {
+            ui.closeTransactionHistoryButton.addEventListener('click', () => {
+                console.log("Close Transaction History button clicked");
+                if (ui.transactionHistoryModal) {
+                    ui.transactionHistoryModal.classList.add('hidden');
                 }
             });
         }
-        
-        // Exit menu button also closes the menu management modal
-        if (ui.exitMenuButton) {
-            ui.exitMenuButton.addEventListener('click', () => {
-                console.log("Exit menu button clicked");
-                if (ui.menuModal) {
-                    ui.menuModal.classList.add('hidden');
+
+        // Close Product Management modal button
+        if (ui.closeProductManagementButton) {
+            ui.closeProductManagementButton.addEventListener('click', () => {
+                console.log("Close Product Management button clicked");
+                if (ui.productManagementModal) {
+                    ui.productManagementModal.classList.add('hidden');
                 }
             });
         }
@@ -955,6 +963,29 @@ document.addEventListener('DOMContentLoaded', () => {
         // }
         
         console.log("Event listeners set up successfully");
+
+        // Close modals with Escape key
+        document.addEventListener('keydown', (e) => {
+            if (e.key === 'Escape') {
+                console.log("Escape key pressed");
+                if (!ui.paymentModal.classList.contains('hidden')) {
+                    // If payment modal is open, close it
+                    closePaymentModal();
+                } else if (!ui.receiptModal.classList.contains('hidden')) {
+                    // If receipt modal is open, close it
+                    closeReceiptModal();
+                } else if (!ui.transactionHistoryModal.classList.contains('hidden')) {
+                    // If transaction history modal is open, close it
+                    if (ui.transactionHistoryModal) ui.transactionHistoryModal.classList.add('hidden');
+                } else if (!ui.productManagementModal.classList.contains('hidden')) {
+                    // If product management modal is open, close it
+                    if (ui.productManagementModal) ui.productManagementModal.classList.add('hidden');
+                } else if (!ui.pinModal.classList.contains('hidden')) {
+                    // If PIN modal is open, close it
+                    if (ui.pinModal) ui.pinModal.classList.add('hidden');
+                }
+            }
+        });
     }
     
     // --- Initialization ---
