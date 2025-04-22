@@ -627,13 +627,41 @@ document.addEventListener('DOMContentLoaded', () => {
 
     async function handleProductSave(event) {
         const button = event.target;
-        const productDiv = button.closest('.flex');
+        const productDiv = button.parentElement.parentElement;
+    
+        console.log("handleProductSave called. Button:", button);
+        console.log("Found productDiv:", productDiv);
+    
+        if (!productDiv) {
+            console.error("Could not find parent product div for save button.");
+            showNotification('Error: Could not find product container.', 'error', 5000);
+            return; // Exit if parent div not found
+        }
+    
         const nameInput = productDiv.querySelector('.product-name-input');
         const priceInput = productDiv.querySelector('.product-price-input');
         const id = button.dataset.id;
+    
+        console.log("Found nameInput:", nameInput);
+        console.log("Found priceInput:", priceInput);
+        console.log("Product ID:", id);
+    
+    
+        if (!nameInput) {
+            console.error("Could not find product name input within the product div.");
+            showNotification('Error: Could not find product name input.', 'error', 5000);
+            return; // Exit if name input not found
+        }
+    
+        if (!priceInput) {
+            console.error("Could not find product price input within the product div.");
+            showNotification('Error: Could not find product price input.', 'error', 5000);
+            return; // Exit if price input not found
+        }
+    
         const newName = nameInput.value.trim();
         const newPrice = parseFloat(priceInput.value);
-
+    
         if (!newName || isNaN(newPrice) || newPrice < 0) { showNotification('Invalid product data.', 'error', 5000); return; }
         try {
             showLoading();
