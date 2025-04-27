@@ -88,7 +88,7 @@ Here’s a quick look at the core tables:
 - `transactions` – Purchase logs
 - `balance_transactions` – Balance top-ups
 
-![Database Schema](\assets\pics\Database-Schema.png)
+![Database Schema](/assets/pics/Database-Schema.png)
 
 ---
 
