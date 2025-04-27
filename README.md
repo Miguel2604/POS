@@ -77,28 +77,6 @@ Your packaged app will appear in the `dist` folder.
 
 ---
 
-## 🔐 Admin & Student Management
-
-### 👤 Create an Admin
-
-1. Add a new user via Supabase Authentication
-2. Insert into the `admins` table:
-   ```sql
-   INSERT INTO admins (user_id, name)
-   VALUES ('auth-user-id-from-supabase', 'Admin Name');
-   ```
-
-### 🎓 Add Students
-
-Insert directly into the `students` table:
-
-```sql
-INSERT INTO students (uid, name, balance)
-VALUES ('student-id', 'Student Name', 0.00);
-```
-
----
-
 ## 🧱 Database Overview
 
 Here’s a quick look at the core tables:
@@ -109,6 +87,8 @@ Here’s a quick look at the core tables:
 - `products` – Vendor product listings
 - `transactions` – Purchase logs
 - `balance_transactions` – Balance top-ups
+
+![Database Schema](assets/pics/Database Schema.png)
 
 ---
 
@@ -136,25 +116,6 @@ university-canteen-pos/
 - **Supabase** – Backend + Auth (Postgres + Realtime)
 - **Tailwind CSS** – UI styling
 - **JavaScript & HTML** – Interface logic and structure
-
----
-
-## 🚯 Common Issues & Fixes
-
-### ❌ Can’t log in?
-
-- Make sure the user exists in both `auth.users` and the relevant role table (`vendors` or `admins`)
-- Double-check Supabase credentials
-
-### 🔌 RFID reader not working?
-
-- Make sure it's plugged in and detected
-- Focus the correct input field before scanning
-
-### 🧱 Build failed?
-
-- Try running the terminal/command prompt as administrator
-- Ensure you have app icons set up in `assets/`
 
 ---
 
