@@ -55,13 +55,7 @@ Make sure you’ve got the following:
    npm install
    ```
 
-3. Set up Supabase:
-
-   - Create a project at [supabase.com](https://supabase.com)
-   - Run the provided SQL setup scripts in the Supabase SQL Editor
-   - Update your Supabase URL and anon key in `main.js`
-
-4. Run the app:
+3. Run the app:
 
    ```bash
    npm start
