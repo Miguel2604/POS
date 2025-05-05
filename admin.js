@@ -159,6 +159,14 @@ document.addEventListener('DOMContentLoaded', () => {
         });
         ui.topupButton.addEventListener('click', () => topUpBalance());
 
+        // Limit top-up amount input to 4 characters
+        ui.topupAmount.addEventListener('input', (event) => {
+            const input = event.target;
+            if (input.value.length > 4) {
+                input.value = input.value.slice(0, 4);
+            }
+        });
+
         // --- NEW: Image Upload Listeners ---
         ui.studentImageInput.addEventListener('change', handleImageFileSelection);
         ui.uploadImageButton.addEventListener('click', handleImageUpload);
@@ -281,6 +289,11 @@ document.addEventListener('DOMContentLoaded', () => {
 
         if (!amountStr || isNaN(amount) || amount <= 0) {
             showNotification('Please enter a valid positive amount', 'error');
+            return;
+        }
+
+        if (amount > 9999) {
+            showNotification('Top-up amount cannot exceed 9999', 'error');
             return;
         }
 
