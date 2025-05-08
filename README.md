@@ -23,6 +23,7 @@ This system helps streamline daily operations in your university canteen. Whethe
 - Filter and search through records with ease
 
 ### 🧑‍🎓 Student Web Portal
+- https://student-balance-web-app-for-pos.vercel.app/
 - Students can check their current balance
 - View complete transaction history
 - Download transaction history as CSV
