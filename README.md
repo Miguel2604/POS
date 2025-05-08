@@ -22,6 +22,12 @@ This system helps streamline daily operations in your university canteen. Whethe
 - Enable self-service kiosk mode for balance inquiries
 - Filter and search through records with ease
 
+### 🧑‍🎓 Student Web Portal
+- Students can check their current balance
+- View complete transaction history
+- Download transaction history as CSV
+- Responsive design accessible from any device
+
 ### 🌐 General Features
 
 - Secure login with role-based access
