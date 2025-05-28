@@ -92,6 +92,12 @@ Here’s a quick look at the core tables:
 
 ---
 
+## 📸 Screenshots
+
+![Application Preview](/assets/pics/preview.png)
+
+---
+
 ## 🧪 Project Structure
 
 ```
